@@ -7,6 +7,7 @@
 export const OPENINGS_DATABASE = [
   {
     id: 'queens_gambit_declined',
+    side: 'white',
     eco: 'D35',
     name: 'Queen\'s Gambit Declined: Exchange Variation',
     moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'cxd5', 'exd5', 'Bg5', 'c6', 'e3'],
@@ -36,6 +37,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'caro_kann_advance',
+    side: 'black',
     eco: 'B12',
     name: 'Caro-Kann Defense: Advance Variation',
     moves: ['e4', 'c6', 'd4', 'd5', 'e5', 'Bf5', 'Nf3', 'e6', 'Be2', 'c5'],
@@ -64,6 +66,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'french_winawer',
+    side: 'black',
     eco: 'C18',
     name: 'French Defense: Winawer Variation',
     moves: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Bb4', 'e5', 'c5', 'a3', 'Bxc3+'],
@@ -91,6 +94,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'kings_indian',
+    side: 'black',
     eco: 'E97',
     name: 'King\'s Indian Defense: Mar del Plata',
     moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7', 'e4', 'd6', 'Nf3', 'O-O', 'Be2', 'e5', 'O-O', 'Nc6', 'd5', 'Ne7'],
@@ -125,6 +129,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'nimzo_indian',
+    side: 'black',
     eco: 'E50',
     name: 'Nimzo-Indian Defense',
     moves: ['d4', 'Nf6', 'c4', 'e6', 'Nc3', 'Bb4'],
@@ -151,6 +156,7 @@ export const OPENINGS_DATABASE = [
 
   {
     id: 'sicilian_najdorf',
+    side: 'black',
     eco: 'B90',
     name: 'Sicilian Defense: Najdorf Variation',
     moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6'],
@@ -232,6 +238,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'sicilian_dragon',
+    side: 'black',
     eco: 'B70',
     name: 'Sicilian Defense: Dragon Variation',
     moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'g6'],
@@ -261,6 +268,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'ruy_lopez_marshall',
+    side: 'white',
     eco: 'C89',
     name: 'Ruy Lopez: Marshall Attack',
     moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4', 'Nf6', 'O-O', 'Be7', 'Re1', 'b5', 'Bb3', 'O-O', 'c3', 'd5'],
@@ -295,6 +303,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'italian_evans',
+    side: 'white',
     eco: 'C52',
     name: 'Italian Game: Evans Gambit',
     moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'b4', 'Bxb4', 'c3', 'Ba5', 'd4'],
@@ -324,6 +333,7 @@ export const OPENINGS_DATABASE = [
   },
   {
     id: 'london_system',
+    side: 'white',
     eco: 'A48',
     name: 'London System: Main Line Setup',
     moves: ['d4', 'Nf6', 'Bf4', 'd5', 'e3', 'c5', 'c3', 'Nc6', 'Nd2', 'e6'],
@@ -348,6 +358,102 @@ export const OPENINGS_DATABASE = [
     candidates: [
       { san: 'Ngf3', name: 'Main Knight Line', winW: 39, draw: 39, winB: 22, count: '140,000' },
       { san: 'Bd3', name: 'Active Bishop Line', winW: 40, draw: 37, winB: 23, count: '95,000' }
+    ]
+  },
+  {
+    id: 'scotch_gambit',
+    side: 'white',
+    eco: 'C44',
+    name: 'Scotch Gambit',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'd4', 'exd4', 'Bc4'],
+    uciSequence: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'd2d4', 'e5d4', 'f1c4'],
+    description: 'An aggressive alternative to the main line Scotch, sacrificing a pawn to accelerate development and attack f7.',
+    keyIdeas: [
+        'White sacrifices the d4 pawn for quick development and kingside attacking chances.',
+        'White aims to exert pressure on Black by utilizing the active bishop on c4 and knight on f3.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'e4', rationale: 'King\'s pawn opening.', enemyPlan: '1...e5.', warning: 'Classic.' },
+        { ply: 2, move: 'e5', rationale: 'Symmetry.', enemyPlan: '2.Nf3.', warning: 'Watch e5.' },
+        { ply: 3, move: 'Nf3', rationale: 'Attacking.', enemyPlan: '2...Nc6.', warning: 'Development.' },
+        { ply: 4, move: 'Nc6', rationale: 'Defending.', enemyPlan: '3.d4.', warning: 'Center.' },
+        { ply: 5, move: 'd4', rationale: 'Scotch Game!', enemyPlan: '3...exd4.', warning: 'Center challenge.' },
+        { ply: 6, move: 'exd4', rationale: 'Gambit begins.', enemyPlan: '4.Bc4.', warning: 'Accepts.' },
+        { ply: 7, move: 'Bc4', rationale: 'Aggressive development!', enemyPlan: '4...Bc5.', warning: 'Aiming at f7.' }
+    ],
+    candidates: [
+        { san: 'Bc5', name: 'Giuoco Piano setup', winW: 40, draw: 30, winB: 30, count: '12,000' },
+        { san: 'Nf6', name: 'Knight development', winW: 38, draw: 35, winB: 27, count: '8,500' }
+    ]
+  },
+  {
+    id: 'modern_defense',
+    side: 'black',
+    eco: 'A40',
+    name: 'Modern Defense',
+    moves: ['e4', 'g6', 'd4', 'Bg7'],
+    uciSequence: ['e2e4', 'g7g6', 'd2d4', 'f8g7'],
+    description: 'A flexible, hypermodern defense where Black fianchettoes the dark-squared bishop to control the center from a distance.',
+    keyIdeas: [
+        'Black allows White to build a large center and then strikes it later with ...c5 or ...e5.',
+        'Extremely flexible, can transpose into various Pirc or King\'s Indian setups.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'e4', rationale: 'Central push.', enemyPlan: '1...g6.', warning: 'White controls.' },
+        { ply: 2, move: 'g6', rationale: 'Modern Defense setup.', enemyPlan: '2.d4.', warning: 'Prepares Bg7.' },
+        { ply: 3, move: 'd4', rationale: 'Claiming center.', enemyPlan: '2...Bg7.', warning: 'White leads.' },
+        { ply: 4, move: 'Bg7', rationale: 'Fianchetto.', enemyPlan: '3.Nc3.', warning: 'Flexibility.' }
+    ],
+    candidates: [
+        { san: 'Nc3', name: 'Classical Main Line', winW: 42, draw: 30, winB: 28, count: '55,000' },
+        { san: 'c4', name: 'Austrian Attack setup', winW: 40, draw: 32, winB: 28, count: '30,000' }
+    ]
+  },
+  {
+    id: 'benko_gambit',
+    side: 'black',
+    eco: 'A57',
+    name: 'Benko Gambit',
+    moves: ['d4', 'Nf6', 'c4', 'c5', 'd5', 'b5'],
+    uciSequence: ['d2d4', 'g8f6', 'c2c4', 'c7c5', 'd4d5', 'b7b5'],
+    description: 'A highly thematic opening sacrifice for long-term positional compensation. Black sacrifices a pawn for constant pressure on the queenside.',
+    keyIdeas: [
+        'Black uses the open a- and b-files to put intense pressure on White\'s queenside.',
+        'Black places heavy pressure on White\'s queenside pawns, often leading to a comfortable endgame.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'd4', rationale: 'Central control.', enemyPlan: '1...Nf6.', warning: 'Standard.' },
+        { ply: 2, move: 'Nf6', rationale: 'Flexible.', enemyPlan: '2.c4.', warning: 'Solid.' },
+        { ply: 3, move: 'c4', rationale: 'Space.', enemyPlan: '2...c5.', warning: 'Attacks d4.' },
+        { ply: 4, move: 'c5', rationale: 'Striking.', enemyPlan: '3.d5.', warning: 'Closes center.' },
+        { ply: 5, move: 'd5', rationale: 'Advance.', enemyPlan: '3...b5.', warning: 'Benko!' },
+        { ply: 6, move: 'b5', rationale: 'Gambit!', enemyPlan: '4.cxb5.', warning: 'Sacrifices pawn.' }
+    ],
+    candidates: [
+        { san: 'cxb5', name: 'Accepted', winW: 35, draw: 35, winB: 30, count: '40,000' },
+        { san: 'Nf3', name: 'Declined', winW: 40, draw: 30, winB: 30, count: '15,000' }
+    ]
+  },
+  {
+    id: 'vienna_game',
+    side: 'white',
+    eco: 'C25',
+    name: 'Vienna Game',
+    moves: ['e4', 'e5', 'Nc3'],
+    uciSequence: ['e2e4', 'e7e5', 'b1c3'],
+    description: 'A clever alternative to 2.Nf3, preparing f4 later and often transposing into aggressive Gambits.',
+    keyIdeas: [
+        'White prepares f4, aiming to challenge the center and exert pressure immediately.',
+        'Often leads to sharp tactical battles if Black responds aggressively.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'e4', rationale: 'Center.', enemyPlan: '1...e5.', warning: 'Classic.' },
+        { ply: 2, move: 'e5', rationale: 'Symmetry.', enemyPlan: '2.Nc3.', warning: 'Development.' },
+        { ply: 3, move: 'Nc3', rationale: 'Vienna Game!', enemyPlan: '2...Nf6 or 2...Nc6.', warning: 'Prepares f4.' }
+    ],
+    candidates: [
+        { san: 'Nf6', name: 'Main Line', winW: 38, draw: 32, winB: 30, count: '25,000' },
+        { san: 'Nc6', name: 'Developing', winW: 37, draw: 33, winB: 30, count: '20,000' }
     ]
   }
 ];

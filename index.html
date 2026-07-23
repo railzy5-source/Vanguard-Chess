@@ -382,6 +382,11 @@
             <p class="text-xs text-zinc-400 mt-0.5">Explore deep Grandmaster opening lines with interactive board, real Lichess Masters statistics, and Coach Naomi strategic breakdown!</p>
           </div>
           <div class="flex items-center gap-3">
+            <select id="opening-side-filter" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer">
+              <option value="all">All Sides</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+            </select>
             <select id="opening-select-dropdown" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer">
               <!-- Rendered dynamically -->
             </select>

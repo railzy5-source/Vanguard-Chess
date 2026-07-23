@@ -1494,17 +1494,53 @@ class VanguardChessApp {
    * Opening Book Explorer UI Handling
    */
   initOpeningExplorerUI() {
+    const sideFilter = document.getElementById('opening-side-filter');
+    if (sideFilter) {
+      sideFilter.addEventListener('change', () => this.renderOpeningDropdown());
+    }
+    
+    // Add event listener for dropdown selection
     const select = document.getElementById('opening-select-dropdown');
     if (select) {
-      select.innerHTML = '<option value="free_explore">🌐 Free Exploration (Live Lichess DB)</option>' + OPENINGS_DATABASE.map(op => `<option value="${op.id}">${op.eco} — ${op.name}</option>`).join('');
-      if (this.openingIndex === -1) {
-        select.value = 'free_explore';
-      } else {
-        const op = OPENINGS_DATABASE[this.openingIndex];
-        if (op) select.value = op.id;
-      }
+        select.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val === 'free_explore') {
+                this.openingIndex = -1;
+            } else {
+                this.openingIndex = OPENINGS_DATABASE.findIndex(op => op.id === val);
+            }
+            this.renderOpeningExplorer();
+        });
     }
+
+    this.renderOpeningDropdown();
     this.renderOpeningExplorer();
+  }
+
+  renderOpeningDropdown() {
+    const select = document.getElementById('opening-select-dropdown');
+    const sideFilter = document.getElementById('opening-side-filter');
+    if (!select) return;
+    
+    const selectedSide = sideFilter ? sideFilter.value : 'all';
+    const filteredOpenings = OPENINGS_DATABASE.filter(op => selectedSide === 'all' || op.side === selectedSide);
+    
+    select.innerHTML = '<option value="free_explore">🌐 Free Exploration (Live Lichess DB)</option>' + filteredOpenings.map(op => `<option value="${op.id}">${op.eco} — ${op.name}</option>`).join('');
+    
+    // Handle index/selection update
+    if (this.openingIndex !== -1) {
+        const op = OPENINGS_DATABASE[this.openingIndex];
+        if (op) {
+            if (selectedSide === 'all' || op.side === selectedSide) {
+                select.value = op.id;
+            } else {
+                // If the currently selected opening is filtered out, select free_explore
+                select.value = 'free_explore';
+            }
+        }
+    } else {
+        select.value = 'free_explore';
+    }
   }
 
   renderOpeningExplorer() {
@@ -1663,11 +1699,7 @@ class VanguardChessApp {
       const fen = customGame ? customGame.fen() : this.openingGame.fen();
       const url = `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}`;
       
-      const res = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`Lichess API HTTP ${res.status}`);
       const data = await res.json();
 
