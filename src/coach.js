@@ -175,7 +175,9 @@ export class CoachNaomi {
       surprised: { badge: 'Brilliant!', style: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30', ring: 'ring-cyan-500/60' },
       supportive: { badge: 'GM Advice', style: 'bg-blue-500/10 text-blue-400 border-blue-500/30', ring: 'ring-blue-500/60' },
       smug: { badge: 'Danger / Mistake', style: 'bg-amber-500/10 text-amber-400 border-amber-500/30', ring: 'ring-amber-500/60' },
-      tactical: { badge: 'GM Breakdown', style: 'bg-blue-500/10 text-blue-400 border-blue-500/30', ring: 'ring-blue-500/60' }
+      tactical: { badge: 'GM Breakdown', style: 'bg-blue-500/10 text-blue-400 border-blue-500/30', ring: 'ring-blue-500/60' },
+      concern: { badge: 'Opponent Threat', style: 'bg-amber-500/10 text-amber-400 border-amber-500/30', ring: 'ring-amber-500/60' },
+      opportunity: { badge: 'Opponent Blundered!', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', ring: 'ring-emerald-500/60' }
     };
 
     const config = emotionConfig[emotion] || emotionConfig.tactical;
@@ -473,7 +475,10 @@ export class CoachNaomi {
 
       this.speak(text, this.getEmotionByClass(classification), { rationale, enemyPlan, warning }, true);
     } else {
-      // Opponent moves: ONLY tell enemy's possible intentions, attacks, and forks. Speak: FALSE (no audio interrupt).
+      // Opponent moves: tell enemy's possible intentions, attacks, and forks, AND correctly
+      // reflect the opponent's actual move quality instead of always showing "Danger/Mistake".
+      // Speak: FALSE (no audio interrupt).
+      const classification = moveResult.classification || '';
       const san = moveResult.san || '';
       const text = `Opponent played ${san}.`;
 
@@ -492,7 +497,47 @@ export class CoachNaomi {
         enemyPlan = `The enemy King is directing a check! Look for potential fork, pin, or discovery attacks accompanying this check.`;
       }
 
-      this.speak(text, 'smug', { rationale: null, enemyPlan, warning: null }, false);
+      // BUG FIX: pick badge/emotion from the opponent's real classification instead of
+      // hardcoding 'smug' ("Danger / Mistake") for every single opponent move.
+      let warning = '';
+      if (classification === 'Blunder') {
+        warning = `Opponent just blundered with ${san}! Look for a way to capitalize immediately.`;
+      } else if (classification === 'Mistake') {
+        warning = `That's a loose move from the opponent - look for ways to press your advantage.`;
+      } else if (classification === 'Inaccuracy') {
+        warning = `A slightly imprecise move from the opponent - stay alert for small opportunities.`;
+      } else if (classification === 'Brilliant' || classification === 'Best Move' || classification === 'Excellent') {
+        warning = `That was a strong, precise move from the opponent - stay sharp and don't give anything back.`;
+      } else {
+        warning = `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
+      }
+
+      // BUG FIX: pass '' (not null) for rationale so the stale "Why this is better" card
+      // from your last move is actually cleared instead of persisting on screen.
+      this.speak(text, this.getOpponentEmotionByClass(classification), { rationale: '', enemyPlan, warning }, false);
+    }
+  }
+
+  /**
+   * Maps the opponent's actual move classification to a coach emotion/badge,
+   * so the badge reflects how good or bad the opponent's move really was
+   * (instead of always showing "Danger / Mistake").
+   */
+  getOpponentEmotionByClass(classification) {
+    switch (classification) {
+      case 'Brilliant':
+      case 'Best Move':
+      case 'Excellent':
+        return 'concern';       // Opponent played very well - stay alert
+      case 'Blunder':
+      case 'Mistake':
+        return 'opportunity';   // Opponent slipped up - good news for you
+      case 'Inaccuracy':
+      case 'Good':
+      case 'Book':
+        return 'tactical';      // Nothing alarming either way
+      default:
+        return 'tactical';
     }
   }
 
