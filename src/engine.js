@@ -197,6 +197,7 @@ export class ChessEngine {
     this.sendCommand('setoption name Contempt value 35');
 
     this.currentSkillLevel = skillLevel; // BUG FIX: Track current skill level
+    this.currentElo = clampedElo; // BUG FIX: Track current ELO so classification logic matches actual engine strength
 
     console.log(`Engine set to ${clampedElo} Elo | Skill:${skillLevel} | Depth:${depth} | Blunder:${Math.round(blunderChance*100)}%`);
 
@@ -314,9 +315,15 @@ export class ChessEngine {
       if (this.worker && this.isReady) {
         this.engineBusy = true;
         this.currentTask = { type: 'analyze', resolve: cacheAndResolve };
-        // BUG FIX #1: REMOVED forced Skill Level 20
-        // Now analyzePosition will use whatever skill level is currently active
-        // This fixes the issue where 300-ELO engine moves were analyzed as if master-level
+        // BUG FIX #2: analyzePosition is used for OBJECTIVE analysis only -
+        // grading the human player's move accuracy, best-move arrows, the eval bar,
+        // and Deep Dive candidate lines. None of these should be handicapped by
+        // whatever weak Skill Level/UCI_LimitStrength the opponent bot's Elo last set.
+        // The opponent bot's own move classification does NOT use this function - it
+        // reads multiPV directly from getBestMove()'s response, which is correctly
+        // scaled to its own Elo. So forcing full strength here is safe and correct.
+        this.sendCommand('setoption name UCI_LimitStrength value false');
+        this.sendCommand('setoption name Skill Level value 20');
         this.sendCommand(`setoption name MultiPV value ${multiPVCount}`);
         this.sendCommand(`position fen ${fen}`);
         this.sendCommand(`go depth 10 movetime 1000`);
