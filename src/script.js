@@ -702,10 +702,49 @@ class VanguardChessApp {
 
         const moveRes = this.game.move({ from, to, promotion });
         if (moveRes) {
+          // ✅ USE MULTIPV DATA FROM getBestMove, don't re-analyze!
+          let aiClassification = 'Good';
           let aiScore = 0;
+          
           if (result.multiPV && result.multiPV.length > 0) {
-            aiScore = result.multiPV[0].score || 0;
+            const bestAiMove = result.multiPV[0];
+            const playedAiMove = result.multiPV.find(m => m.moveUci === bestMoveUci);
+            
+            aiScore = playedAiMove ? playedAiMove.score : (bestAiMove.score - 150);
+            const topScore = bestAiMove.score;
+            const aiDiff = Math.max(0, topScore - aiScore);
+            
+            // Scale thresholds by AI ELO
+            const aiElo = this.engine.currentElo || 1500;
+            let scale = 1.0;
+            if (aiElo <= 600) {
+              scale = 4.0;  // Increased to 4.0 for ultra-weak play
+            } else if (aiElo <= 1000) {
+              scale = 3.0;
+            } else if (aiElo <= 1400) {
+              scale = 2.0;
+            } else if (aiElo <= 1800) {
+              scale = 1.5;
+            }
+            
+            // Classify with scaled thresholds
+            if (bestMoveUci === bestAiMove.moveUci) {
+              aiClassification = 'Best Move';
+            } else if (aiDiff < 20 * scale) {
+              aiClassification = 'Excellent';
+            } else if (aiDiff < 60 * scale) {
+              aiClassification = 'Good';
+            } else if (aiDiff < 120 * scale) {
+              aiClassification = 'Inaccuracy';
+            } else if (aiDiff < 220 * scale) {
+              aiClassification = 'Mistake';
+            } else {
+              aiClassification = 'Blunder';
+            }
+            
+            console.log(`🤖 AI Move: ${moveRes.san} | Diff: ${aiDiff}cp | Scale: ${scale}x | Class: ${aiClassification}`);
           }
+          
           const scoreFromWhite = moveRes.color === 'w' ? aiScore : -aiScore;
 
           this.moveHistory.push({
@@ -717,7 +756,7 @@ class VanguardChessApp {
             color: moveRes.color,
             score: aiScore,
             scoreFromWhite: scoreFromWhite,
-            classification: 'Best Move'
+            classification: aiClassification  // ✅ From actual analysis
           });
 
           this.currentPlyIndex = this.moveHistory.length;

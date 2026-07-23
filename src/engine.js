@@ -14,6 +14,8 @@ export class ChessEngine {
     this.multiPVData = [];
     this.currentTask = null;
     this.difficulty = 'Club'; // 'Beginner' | 'Club' | 'Master'
+    this.currentSkillLevel = 10; // Track actual skill level for debugging/analysis
+    this.currentElo = 1500; // Track actual ELO for classification logic
     this.initStockfish();
     this.analysisCache = new Map();
   }
@@ -194,6 +196,8 @@ export class ChessEngine {
     this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
     this.sendCommand('setoption name Contempt value 35');
 
+    this.currentSkillLevel = skillLevel; // BUG FIX: Track current skill level
+
     console.log(`Engine set to ${clampedElo} Elo | Skill:${skillLevel} | Depth:${depth} | Blunder:${Math.round(blunderChance*100)}%`);
 
     return { depth, movetime, skillLevel, blunderChance };
@@ -210,12 +214,15 @@ export class ChessEngine {
       if (level === 'Beginner') {
         this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 3');
+        this.currentSkillLevel = 3; // BUG FIX: Track skill
       } else if (level === 'Club') {
         this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 10');
+        this.currentSkillLevel = 10; // BUG FIX: Track skill
       } else if (level === 'Master') {
         this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 20');
+        this.currentSkillLevel = 20; // BUG FIX: Track skill
       } else if (level === 'ELO') {
         this.setEngineElo(chessElo);
       }
@@ -307,7 +314,9 @@ export class ChessEngine {
       if (this.worker && this.isReady) {
         this.engineBusy = true;
         this.currentTask = { type: 'analyze', resolve: cacheAndResolve };
-        this.sendCommand('setoption name Skill Level value 20'); // Force master skill for accurate analysis/coach advice
+        // BUG FIX #1: REMOVED forced Skill Level 20
+        // Now analyzePosition will use whatever skill level is currently active
+        // This fixes the issue where 300-ELO engine moves were analyzed as if master-level
         this.sendCommand(`setoption name MultiPV value ${multiPVCount}`);
         this.sendCommand(`position fen ${fen}`);
         this.sendCommand(`go depth 10 movetime 1000`);
