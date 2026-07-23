@@ -138,6 +138,24 @@ export class ChessEngine {
   }
 
   /**
+   * Helper to calculate engine settings based on ELO
+   */
+  getEngineSettings(elo) {
+    const targetElo = Math.max(100, Math.min(2800, elo));
+    let skillLevel, depth, movetime;
+
+    if (targetElo < 400) { skillLevel = 0; depth = 1; movetime = 100; }
+    else if (targetElo < 800) { skillLevel = 2; depth = 2; movetime = 200; }
+    else if (targetElo < 1200) { skillLevel = 6; depth = 4; movetime = 400; }
+    else if (targetElo < 1600) { skillLevel = 10; depth = 6; movetime = 600; }
+    else if (targetElo < 2000) { skillLevel = 14; depth = 8; movetime = 1000; }
+    else if (targetElo < 2400) { skillLevel = 18; depth = 12; movetime = 2000; }
+    else { skillLevel = 20; depth = 15; movetime = 3000; }
+
+    return { skillLevel, depth, movetime };
+  }
+
+  /**
    * Sets engine difficulty level
    * @param {'Beginner'|'Club'|'Master'|'ELO'} level 
    * @param {number} chessElo
@@ -152,17 +170,7 @@ export class ChessEngine {
       } else if (level === 'Master') {
         this.sendCommand('setoption name Skill Level value 20');
       } else if (level === 'ELO') {
-        const targetElo = Math.round((chessElo + 50) / 50) * 50;
-        let skillLevel = 10;
-        if (targetElo <= 600) skillLevel = 0;
-        else if (targetElo <= 800) skillLevel = 2;
-        else if (targetElo <= 1000) skillLevel = 4;
-        else if (targetElo <= 1200) skillLevel = 7;
-        else if (targetElo <= 1400) skillLevel = 10;
-        else if (targetElo <= 1600) skillLevel = 13;
-        else if (targetElo <= 1800) skillLevel = 15;
-        else if (targetElo <= 2000) skillLevel = 18;
-        else skillLevel = 20;
+        const { skillLevel } = this.getEngineSettings(chessElo);
         this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
       }
     }
@@ -180,52 +188,28 @@ export class ChessEngine {
 
       let depth = 8;
       let movetime = 800;
+      let skillLevel = 10;
+
       if (difficulty === 'Beginner') {
         depth = 3;
         movetime = 400;
+        skillLevel = 3;
       } else if (difficulty === 'Master') {
         depth = 12;
         movetime = 1500;
+        skillLevel = 20;
       } else if (difficulty === 'ELO') {
-        const targetElo = Math.round((chessElo + 50) / 50) * 50;
-        if (targetElo <= 1000) {
-          depth = 4;
-          movetime = 400;
-        } else if (targetElo <= 1500) {
-          depth = 8;
-          movetime = 800;
-        } else {
-          depth = 12;
-          movetime = 1500;
-        }
+        const settings = this.getEngineSettings(chessElo);
+        depth = settings.depth;
+        movetime = settings.movetime;
+        skillLevel = settings.skillLevel;
       }
 
       if (this.worker && this.isReady) {
         this.engineBusy = true;
         this.currentTask = { type: 'bestmove', resolve };
 
-        // Ensure correct Stockfish Skill Level for the game opponent
-        if (difficulty === 'Beginner') {
-          this.sendCommand('setoption name Skill Level value 3');
-        } else if (difficulty === 'Club') {
-          this.sendCommand('setoption name Skill Level value 10');
-        } else if (difficulty === 'Master') {
-          this.sendCommand('setoption name Skill Level value 20');
-        } else if (difficulty === 'ELO') {
-          const targetElo = Math.round((chessElo + 50) / 50) * 50;
-          let skillLevel = 10;
-          if (targetElo <= 600) skillLevel = 0;
-          else if (targetElo <= 800) skillLevel = 2;
-          else if (targetElo <= 1000) skillLevel = 4;
-          else if (targetElo <= 1200) skillLevel = 7;
-          else if (targetElo <= 1400) skillLevel = 10;
-          else if (targetElo <= 1600) skillLevel = 13;
-          else if (targetElo <= 1800) skillLevel = 15;
-          else if (targetElo <= 2000) skillLevel = 18;
-          else skillLevel = 20;
-          this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
-        }
-
+        this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
         this.sendCommand(`position fen ${fen}`);
         this.sendCommand(`go depth ${depth} movetime ${movetime}`);
       } else {

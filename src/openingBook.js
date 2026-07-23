@@ -435,28 +435,100 @@ export const OPENINGS_DATABASE = [
     ]
   },
   {
-    id: 'vienna_game',
-    side: 'white',
-    eco: 'C25',
-    name: 'Vienna Game',
-    moves: ['e4', 'e5', 'Nc3'],
-    uciSequence: ['e2e4', 'e7e5', 'b1c3'],
-    description: 'A clever alternative to 2.Nf3, preparing f4 later and often transposing into aggressive Gambits.',
+    id: 'pirc_defense',
+    side: 'black',
+    eco: 'B07',
+    name: 'Pirc Defense',
+    moves: ['e4', 'd6', 'd4', 'Nf6', 'Nc3', 'g6'],
+    uciSequence: ['e2e4', 'd7d6', 'd2d4', 'g8f6', 'b1c3', 'g7g6'],
+    description: 'A hypermodern defense where Black allows White to take the center before challenging it.',
     keyIdeas: [
-        'White prepares f4, aiming to challenge the center and exert pressure immediately.',
-        'Often leads to sharp tactical battles if Black responds aggressively.'
+        'Black fianchettoes the king bishop to put pressure on the center from a distance.',
+        'Black aims for counter-attacking chances, often with ...c5 or ...e5 breaks.'
     ],
     moveCommentary: [
-        { ply: 1, move: 'e4', rationale: 'Center.', enemyPlan: '1...e5.', warning: 'Classic.' },
-        { ply: 2, move: 'e5', rationale: 'Symmetry.', enemyPlan: '2.Nc3.', warning: 'Development.' },
-        { ply: 3, move: 'Nc3', rationale: 'Vienna Game!', enemyPlan: '2...Nf6 or 2...Nc6.', warning: 'Prepares f4.' }
+        { ply: 1, move: 'e4', rationale: 'King\'s pawn opening.', enemyPlan: '1...d6.', warning: 'Standard.' },
+        { ply: 2, move: 'd6', rationale: 'Pirc setup.', enemyPlan: '2.d4.', warning: 'Prepares Nf6.' },
+        { ply: 3, move: 'd4', rationale: 'Central control.', enemyPlan: '2...Nf6.', warning: 'Challenges e4.' },
+        { ply: 4, move: 'Nf6', rationale: 'Attacks e4.', enemyPlan: '3.Nc3.', warning: 'Active.' },
+        { ply: 5, move: 'Nc3', rationale: 'Defends e4.', enemyPlan: '3...g6.', warning: 'Development.' },
+        { ply: 6, move: 'g6', rationale: 'Fianchetto.', enemyPlan: '4.Nf3.', warning: 'Modern setup.' }
     ],
     candidates: [
-        { san: 'Nf6', name: 'Main Line', winW: 38, draw: 32, winB: 30, count: '25,000' },
-        { san: 'Nc6', name: 'Developing', winW: 37, draw: 33, winB: 30, count: '20,000' }
+        { san: 'Nf3', name: 'Classical System', winW: 42, draw: 30, winB: 28, count: '65,000' },
+        { san: 'f4', name: 'Austrian Attack', winW: 40, draw: 32, winB: 28, count: '45,000' }
+    ]
+  },
+  {
+    id: 'scandinavian_defense',
+    side: 'black',
+    eco: 'B01',
+    name: 'Scandinavian Defense',
+    moves: ['e4', 'd5', 'exd5', 'Qxd5', 'Nc3', 'Qa5'],
+    uciSequence: ['e2e4', 'd7d5', 'e4d5', 'd8d5', 'b1c3', 'd5a5'],
+    description: 'A direct challenge to White\'s center from the very first move.',
+    keyIdeas: [
+        'Black forces White to resolve the central tension immediately.',
+        'Black often trades queens early and aims for a quick development.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'e4', rationale: 'Center.', enemyPlan: '1...d5.', warning: 'Standard.' },
+        { ply: 2, move: 'd5', rationale: 'Immediate challenge.', enemyPlan: '2.exd5.', warning: 'Asymmetrical.' },
+        { ply: 3, move: 'exd5', rationale: 'Capture.', enemyPlan: '2...Qxd5.', warning: 'White leads in development.' },
+        { ply: 4, move: 'Qxd5', rationale: 'Recapture.', enemyPlan: '3.Nc3.', warning: 'Queen develops early.' },
+        { ply: 5, move: 'Nc3', rationale: 'Development with tempo.', enemyPlan: '3...Qa5.', warning: 'Attacks queen.' },
+        { ply: 6, move: 'Qa5', rationale: 'Queen retreats.', enemyPlan: '4.d4.', warning: 'Safe.' }
+    ],
+    candidates: [
+        { san: 'd4', name: 'Classical Main Line', winW: 43, draw: 29, winB: 28, count: '80,000' },
+        { san: 'Nf3', name: 'Modern Line', winW: 40, draw: 32, winB: 28, count: '35,000' }
+    ]
+  },
+  {
+    id: 'alekhines_defense',
+    side: 'black',
+    eco: 'B02',
+    name: 'Alekhine\'s Defense',
+    moves: ['e4', 'Nf6'],
+    uciSequence: ['e2e4', 'g8f6'],
+    description: 'A provocative defense where Black invites White to push pawns to attack the knight, hoping to create structural weaknesses in White\'s center.',
+    keyIdeas: [
+        'Black lures White into advancing pawns.',
+        'Black challenges the pawn center with ...d6, ...c5, etc.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'e4', rationale: 'Center.', enemyPlan: '1...Nf6.', warning: 'Standard.' },
+        { ply: 2, move: 'Nf6', rationale: 'Alekhine\'s Defense!', enemyPlan: '2.e5.', warning: 'Provocative!' }
+    ],
+    candidates: [
+        { san: 'e5', name: 'Main Line', winW: 44, draw: 27, winB: 29, count: '75,000' },
+        { san: 'd3', name: 'Exchange Variation', winW: 41, draw: 33, winB: 26, count: '20,000' }
+    ]
+  },
+  {
+    id: 'kings_gambit',
+    side: 'white',
+    eco: 'C30',
+    name: 'King\'s Gambit',
+    moves: ['e4', 'e5', 'f4'],
+    uciSequence: ['e2e4', 'e7e5', 'f2f4'],
+    description: 'A classic and highly aggressive romantic opening, sacrificing a pawn on the second move for rapid development and an attack on f7.',
+    keyIdeas: [
+        'White sacrifices the f-pawn to deflect Black\'s e5-pawn and open the f-file.',
+        'White aims for a quick attack on the f7 square.'
+    ],
+    moveCommentary: [
+        { ply: 1, move: 'e4', rationale: 'King\'s Pawn.', enemyPlan: '1...e5.', warning: 'Standard.' },
+        { ply: 2, move: 'e5', rationale: 'Symmetry.', enemyPlan: '2.f4.', warning: 'Watch for King\'s Gambit.' },
+        { ply: 3, move: 'f4', rationale: 'King\'s Gambit!', enemyPlan: '2...exf4.', warning: 'Sacrifices f-pawn.' }
+    ],
+    candidates: [
+        { san: 'exf4', name: 'Accepted', winW: 43, draw: 25, winB: 32, count: '90,000' },
+        { san: 'd5', name: 'Falkbeer Countergambit', winW: 38, draw: 32, winB: 30, count: '30,000' }
     ]
   }
 ];
+
 
 export class OpeningExplorer {
   /**
