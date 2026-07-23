@@ -1663,7 +1663,11 @@ class VanguardChessApp {
       const fen = customGame ? customGame.fen() : this.openingGame.fen();
       const url = `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}`;
       
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
       if (!res.ok) throw new Error(`Lichess API HTTP ${res.status}`);
       const data = await res.json();
 
