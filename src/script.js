@@ -1407,7 +1407,44 @@ class VanguardChessApp {
    */
   async updateMatchMetrics(playerPlayedMove = null) {
     const fen = this.game.fen();
-    
+
+    // BUG FIX: On checkmate there are no legal moves, so analyzePosition() correctly
+    // returns an empty array - but that was silently falling through to the neutral
+    // 0.00 eval / 50% win prob defaults below, even though the position is fully decisive.
+    // Handle checkmate explicitly so the panel reflects the actual result.
+    if (this.game.isCheckmate()) {
+      // The side whose turn it is right now is the side that just got checkmated (lost).
+      const loserIsWhite = this.game.turn() === 'w';
+      const whiteWinProbMate = loserIsWhite ? 0 : 100;
+      const mateEvalStr = loserIsWhite ? '-#0' : '+#0';
+
+      const winProbVal = document.getElementById('win-prob-val');
+      const winProbBar = document.getElementById('win-prob-bar');
+      const displayWinProbMate = this.playerColor === 'black' ? (100 - whiteWinProbMate) : whiteWinProbMate;
+      if (winProbVal) winProbVal.textContent = `${displayWinProbMate.toFixed(1)}%`;
+      if (winProbBar) winProbBar.style.width = `${displayWinProbMate}%`;
+
+      const evalScoreText = document.getElementById('eval-score-text');
+      const evalBarWhite = document.getElementById('eval-bar-white');
+      const evalBarBlack = document.getElementById('eval-bar-black');
+      if (evalScoreText) evalScoreText.textContent = mateEvalStr;
+      if (evalBarWhite && evalBarBlack) {
+        evalBarWhite.style.width = `${whiteWinProbMate}%`;
+        evalBarBlack.style.width = `${100 - whiteWinProbMate}%`;
+      }
+
+      const bestAccValMate = document.getElementById('best-acc-val');
+      if (bestAccValMate) {
+        if (this.playerAccuracyScores.length > 0) {
+          const avgAccMate = Math.round(this.playerAccuracyScores.reduce((a, b) => a + b, 0) / this.playerAccuracyScores.length);
+          bestAccValMate.textContent = `${avgAccMate}%`;
+        } else {
+          bestAccValMate.textContent = '100%';
+        }
+      }
+      return;
+    }
+
     // Get candidate evaluations from engine
     const candidateMoves = await this.engine.analyzePosition(fen, 3);
     let topScore = 0;
