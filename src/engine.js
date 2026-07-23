@@ -138,21 +138,65 @@ export class ChessEngine {
   }
 
   /**
-   * Helper to calculate engine settings based on ELO
+   * Sets engine strength parameters based on target ELO
+   * @param {number} elo
+   * @returns {{depth: number, movetime: number, skillLevel: number, blunderChance: number}}
    */
-  getEngineSettings(elo) {
-    const targetElo = Math.max(100, Math.min(2800, elo));
-    let skillLevel, depth, movetime;
+  setEngineElo(elo) {
+    const clampedElo = Math.max(100, Math.min(2700, elo));
+    
+    // Core strength controls
+    this.sendCommand('setoption name UCI_LimitStrength value true');
+    this.sendCommand(`setoption name UCI_Elo value ${clampedElo}`);
+    
+    let skillLevel = 20;
+    let depth = 12;
+    let movetime = 1000;
+    let blunderChance = 0;
 
-    if (targetElo < 400) { skillLevel = 0; depth = 1; movetime = 100; }
-    else if (targetElo < 800) { skillLevel = 2; depth = 2; movetime = 200; }
-    else if (targetElo < 1200) { skillLevel = 6; depth = 4; movetime = 400; }
-    else if (targetElo < 1600) { skillLevel = 10; depth = 6; movetime = 600; }
-    else if (targetElo < 2000) { skillLevel = 14; depth = 8; movetime = 1000; }
-    else if (targetElo < 2400) { skillLevel = 18; depth = 12; movetime = 2000; }
-    else { skillLevel = 20; depth = 15; movetime = 3000; }
+    if (clampedElo <= 600) {
+      skillLevel = 0;
+      depth = 1;
+      movetime = 40;
+      blunderChance = 0.55;     // 55% chance to play a random move
+    } 
+    else if (clampedElo <= 1000) {
+      skillLevel = 0;
+      depth = 2;
+      movetime = 100;
+      blunderChance = 0.40;
+    } 
+    else if (clampedElo <= 1400) {
+      skillLevel = 3;
+      depth = 5;
+      movetime = 350;
+      blunderChance = 0.25;
+    } 
+    else if (clampedElo <= 1800) {
+      skillLevel = 8;
+      depth = 8;
+      movetime = 700;
+      blunderChance = 0.12;
+    } 
+    else if (clampedElo <= 2200) {
+      skillLevel = 14;
+      depth = 11;
+      movetime = 1300;
+      blunderChance = 0.05;
+    } 
+    else {
+      skillLevel = 20;
+      depth = 18;
+      movetime = 2500;
+      blunderChance = 0;
+    }
 
-    return { skillLevel, depth, movetime };
+    this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
+    this.sendCommand('setoption name Contempt value 35');
+
+    console.log(`Engine set to ${clampedElo} Elo | Skill:${skillLevel} | Depth:${depth} | Blunder:${Math.round(blunderChance*100)}%`);
+
+    return { depth, movetime, skillLevel, blunderChance };
   }
 
   /**
@@ -164,14 +208,16 @@ export class ChessEngine {
     this.difficulty = level;
     if (this.worker) {
       if (level === 'Beginner') {
+        this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 3');
       } else if (level === 'Club') {
+        this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 10');
       } else if (level === 'Master') {
+        this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 20');
       } else if (level === 'ELO') {
-        const { skillLevel } = this.getEngineSettings(chessElo);
-        this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
+        this.setEngineElo(chessElo);
       }
     }
   }
@@ -180,7 +226,7 @@ export class ChessEngine {
    * Gets best move for current position
    * @param {string} fen 
    * @param {'white'|'black'} turn 
-   * @returns {Promise<{bestMove: string, multiPV: Array}>}
+   * @returns {Promise<{bestMove: string, multiPV: Array, blunderChance: number}>}
    */
   getBestMove(fen, difficulty = this.difficulty, chessElo = 1500) {
     return new Promise((resolve) => {
@@ -188,28 +234,29 @@ export class ChessEngine {
 
       let depth = 8;
       let movetime = 800;
-      let skillLevel = 10;
+      let blunderChance = 0;
 
       if (difficulty === 'Beginner') {
         depth = 3;
         movetime = 400;
-        skillLevel = 3;
+        this.sendCommand('setoption name UCI_LimitStrength value false');
+        this.sendCommand('setoption name Skill Level value 3');
       } else if (difficulty === 'Master') {
         depth = 12;
         movetime = 1500;
-        skillLevel = 20;
+        this.sendCommand('setoption name UCI_LimitStrength value false');
+        this.sendCommand('setoption name Skill Level value 20');
       } else if (difficulty === 'ELO') {
-        const settings = this.getEngineSettings(chessElo);
+        const settings = this.setEngineElo(chessElo);
         depth = settings.depth;
         movetime = settings.movetime;
-        skillLevel = settings.skillLevel;
+        blunderChance = settings.blunderChance;
       }
 
       if (this.worker && this.isReady) {
         this.engineBusy = true;
-        this.currentTask = { type: 'bestmove', resolve };
+        this.currentTask = { type: 'bestmove', resolve: (res) => resolve({...res, blunderChance}) };
 
-        this.sendCommand(`setoption name Skill Level value ${skillLevel}`);
         this.sendCommand(`position fen ${fen}`);
         this.sendCommand(`go depth ${depth} movetime ${movetime}`);
       } else {
@@ -219,7 +266,8 @@ export class ChessEngine {
         setTimeout(() => {
           resolve({
             bestMove: best,
-            multiPV: fallback
+            multiPV: fallback,
+            blunderChance
           });
         }, 300);
       }

@@ -683,7 +683,17 @@ class VanguardChessApp {
 
     try {
       const result = await this.engine.getBestMove(this.game.fen(), this.settings.difficulty, this.settings.chessElo || 1500);
-      const bestMoveUci = result.bestMove;
+      let bestMoveUci = result.bestMove;
+
+      // Apply blunder chance at low elo
+      if (result.blunderChance > 0 && Math.random() < result.blunderChance) {
+        const legalMoves = this.game.moves({ verbose: true });
+        if (legalMoves.length > 0) {
+          const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+          bestMoveUci = randomMove.from + randomMove.to + (randomMove.promotion || '');
+          console.log(`🤖 Engine blundered! Played random move: ${bestMoveUci}`);
+        }
+      }
 
       if (bestMoveUci && this.gameActive) {
         const from = bestMoveUci.substring(0, 2);
