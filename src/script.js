@@ -100,7 +100,13 @@ class VanguardChessApp {
     this.openingBoard = new ChessBoardUI('opening-board-container', {
       chessGame: this.openingGame,
       orientation: 'white',
-      interactive: false
+      interactive: false,
+      onMove: (move) => {
+        if (this.openingIndex === -1 && this.freeExploreGame) {
+          // The board already executed the move on this.freeExploreGame
+          this.renderOpeningExplorer();
+        }
+      }
     });
 
     this.bindEvents();
@@ -349,31 +355,49 @@ class VanguardChessApp {
     // Opening Explorer Stepper Controls
     document.getElementById('opening-select-dropdown')?.addEventListener('change', (e) => {
       const selectedId = e.target.value;
-      const index = OPENINGS_DATABASE.findIndex(o => o.id === selectedId);
-      if (index !== -1) {
-        this.openingIndex = index;
-        this.openingPly = 0;
+      if (selectedId === 'free_explore') {
+        this.openingIndex = -1;
+        this.freeExploreGame = new Chess();
         this.renderOpeningExplorer();
+      } else {
+        const index = OPENINGS_DATABASE.findIndex(o => o.id === selectedId);
+        if (index !== -1) {
+          this.openingIndex = index;
+          this.openingPly = 0;
+          this.renderOpeningExplorer();
+        }
       }
     });
 
     document.getElementById('opening-btn-first')?.addEventListener('click', () => {
+      if (this.openingIndex === -1 && this.freeExploreGame) {
+         this.freeExploreGame.reset();
+         this.renderOpeningExplorer();
+         return;
+      }
       this.openingPly = 0;
       this.renderOpeningExplorer();
     });
 
     document.getElementById('opening-btn-prev')?.addEventListener('click', () => {
+      if (this.openingIndex === -1 && this.freeExploreGame) {
+         this.freeExploreGame.undo();
+         this.renderOpeningExplorer();
+         return;
+      }
       this.openingPly = Math.max(0, this.openingPly - 1);
       this.renderOpeningExplorer();
     });
 
     document.getElementById('opening-btn-next')?.addEventListener('click', () => {
+      if (this.openingIndex === -1) return; // Not supported in free explore
       const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
       this.openingPly = Math.min(op.moves.length, this.openingPly + 1);
       this.renderOpeningExplorer();
     });
 
     document.getElementById('opening-btn-last')?.addEventListener('click', () => {
+      if (this.openingIndex === -1) return; // Not supported in free explore
       const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
       this.openingPly = op.moves.length;
       this.renderOpeningExplorer();
@@ -447,11 +471,22 @@ class VanguardChessApp {
     });
 
     document.getElementById('btn-fetch-lichess-masters')?.addEventListener('click', () => {
-      this.fetchLiveLichessMasters();
+      this.fetchLiveLichessMasters(this.openingIndex === -1 ? this.freeExploreGame : this.openingGame);
     });
 
     // Save Game Button
     document.getElementById('btn-save-game')?.addEventListener('click', () => this.handleSaveGame());
+
+    document.getElementById('opening-candidates-container')?.addEventListener('click', (e) => {
+      const moveEl = e.target.closest('.lichess-candidate-move');
+      if (moveEl && this.openingIndex === -1 && this.freeExploreGame) {
+        const san = moveEl.dataset.san;
+        const moveRes = this.freeExploreGame.move(san);
+        if (moveRes) {
+          this.renderOpeningExplorer();
+        }
+      }
+    });
   }
 
   /**
@@ -496,11 +531,10 @@ class VanguardChessApp {
   async handlePlayerMove(move) {
     if (!this.gameActive) return;
 
-    if (!this.clock.activeColor) {
+    if (!this.clock.isRunning) {
       this.clock.startTimer('w');
-    } else {
-      this.clock.switchTurn();
     }
+    this.clock.switchTurn();
 
     const uci = move.from + move.to + (move.promotion || '');
     
@@ -638,6 +672,10 @@ class VanguardChessApp {
    */
   async triggerAiMove() {
     if (!this.gameActive || this.isAiThinking) return;
+
+    if (!this.clock.isRunning) {
+      this.clock.startTimer('w');
+    }
 
     this.isAiThinking = true;
     this.gameBoard.setInteractive(false);
@@ -896,6 +934,7 @@ class VanguardChessApp {
     this.playerAccuracyScores = [];
     this.gameActive = true;
     this.isAiThinking = false;
+    this.clock.reset();
 
     this.resolvePlayerColor();
     this.gameBoard.setChessGame(this.game);
@@ -1457,13 +1496,18 @@ class VanguardChessApp {
   initOpeningExplorerUI() {
     const select = document.getElementById('opening-select-dropdown');
     if (select) {
-      select.innerHTML = OPENINGS_DATABASE.map(op => `<option value="${op.id}">${op.eco} — ${op.name}</option>`).join('');
+      select.innerHTML = '<option value="free_explore">🌐 Free Exploration (Live Lichess DB)</option>' + OPENINGS_DATABASE.map(op => `<option value="${op.id}">${op.eco} — ${op.name}</option>`).join('');
+      if (this.openingIndex === -1) {
+        select.value = 'free_explore';
+      } else {
+        const op = OPENINGS_DATABASE[this.openingIndex];
+        if (op) select.value = op.id;
+      }
     }
     this.renderOpeningExplorer();
   }
 
   renderOpeningExplorer() {
-    const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
     const ecoBadge = document.getElementById('opening-eco-badge');
     const titleHeader = document.getElementById('opening-title-header');
     const descText = document.getElementById('opening-desc-text');
@@ -1471,6 +1515,38 @@ class VanguardChessApp {
     const commentaryEl = document.getElementById('opening-move-commentary');
     const keyIdeasUl = document.getElementById('opening-key-ideas');
     const candContainer = document.getElementById('opening-candidates-container');
+
+    if (this.openingIndex === -1) {
+      if (!this.freeExploreGame) this.freeExploreGame = new Chess();
+      
+      if (ecoBadge) ecoBadge.textContent = 'LIVE';
+      if (titleHeader) titleHeader.textContent = 'Free Exploration Mode';
+      if (descText) descText.textContent = 'Play moves freely. We automatically fetch millions of Lichess Grandmaster games for your exact board position.';
+      if (plyCounter) plyCounter.textContent = `Ply ${this.freeExploreGame.history().length}`;
+      
+      if (this.openingBoard) {
+        this.openingBoard.setChessGame(this.freeExploreGame);
+        this.openingBoard.setInteractive(true);
+        const history = this.freeExploreGame.history({ verbose: true });
+        if (history.length > 0) {
+          const lastMove = history[history.length - 1];
+          this.openingBoard.setLastMove(lastMove.from, lastMove.to);
+        } else {
+          this.openingBoard.setLastMove(null, null);
+        }
+        this.openingBoard.renderBoard();
+      }
+      
+      if (keyIdeasUl) keyIdeasUl.innerHTML = '<li>Explore lines not in the local database.</li><li>See precise statistics for every candidate move.</li>';
+      if (commentaryEl) commentaryEl.innerHTML = '<div class="text-zinc-400 p-2 italic text-sm">Play a move on the board above to analyze!</div>';
+      
+      if (candContainer) candContainer.innerHTML = '<div class="p-4 text-center text-zinc-400 animate-pulse text-sm">Fetching Master Database... ♟️</div>';
+      
+      this.fetchLiveLichessMasters(this.freeExploreGame);
+      return;
+    }
+
+    const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
 
     if (ecoBadge) ecoBadge.textContent = op.eco;
     if (titleHeader) titleHeader.textContent = op.name;
@@ -1553,7 +1629,7 @@ class VanguardChessApp {
           const winB = c.winB ?? 25;
 
           html += `
-            <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-500/40 transition-colors">
+            <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-500/40 transition-colors cursor-pointer lichess-candidate-move" data-san="${c.san}">
               <div class="flex items-center gap-3">
                 <span class="font-mono font-extrabold text-blue-400 text-sm px-2.5 py-1 bg-blue-500/10 rounded border border-blue-500/20">${c.san}</span>
                 <span class="text-xs text-zinc-300 font-medium">${c.name}</span>
@@ -1574,7 +1650,7 @@ class VanguardChessApp {
     }
   }
 
-  async fetchLiveLichessMasters() {
+  async fetchLiveLichessMasters(customGame) {
     const btn = document.getElementById('btn-fetch-lichess-masters');
     if (btn) {
       btn.textContent = 'Fetching Lichess Masters Database... ♟️';
@@ -1584,7 +1660,7 @@ class VanguardChessApp {
     this.coach.speak("Connecting to the Lichess Masters Database to retrieve millions of high-level Grandmaster game stats for this position... 🌐", "tactical");
 
     try {
-      const fen = this.openingGame.fen();
+      const fen = customGame ? customGame.fen() : this.openingGame.fen();
       const url = `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}`;
       
       const res = await fetch(url);
@@ -1658,7 +1734,33 @@ class VanguardChessApp {
     const info = OpeningExplorer.identifyOpening(sanHistory);
 
     const liveLabel = document.getElementById('live-opening-label');
-    if (liveLabel) liveLabel.textContent = `${info.eco} — ${info.name}`;
+    if (liveLabel) {
+      // Set local fallback first
+      if (info && info.name !== 'Grandmaster Main Line') {
+        liveLabel.textContent = `${info.eco} — ${info.name}`;
+      } else {
+        liveLabel.textContent = 'Searching Opening...';
+      }
+    }
+    
+    // Asynchronously fetch exact opening from Lichess
+    if (this.game && this.game.history().length > 0) {
+      const fen = this.game.fen();
+      fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=0`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.opening && liveLabel) {
+            liveLabel.textContent = `${data.opening.eco} — ${data.opening.name}`;
+          } else if (liveLabel && info) {
+             liveLabel.textContent = `${info.eco} — ${info.name}`; // fallback
+          }
+        })
+        .catch(err => {
+          if (liveLabel && info) liveLabel.textContent = `${info.eco} — ${info.name}`;
+        });
+    } else if (this.game && this.game.history().length === 0) {
+      if (liveLabel) liveLabel.textContent = 'Standard Starting Position';
+    }
   }
 
   /**

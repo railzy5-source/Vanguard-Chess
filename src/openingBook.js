@@ -6,6 +6,150 @@
 
 export const OPENINGS_DATABASE = [
   {
+    id: 'queens_gambit_declined',
+    eco: 'D35',
+    name: 'Queen\'s Gambit Declined: Exchange Variation',
+    moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'cxd5', 'exd5', 'Bg5', 'c6', 'e3'],
+    uciSequence: ['d2d4', 'd7d5', 'c2c4', 'e7e6', 'b1c3', 'g8f6', 'c4d5', 'e6d5', 'c1g5', 'c7c6', 'e2e3'],
+    description: 'A deeply strategic and solid defense for Black. In the Exchange Variation, White stabilizes the center and plays for a minority attack on the queenside or central control.',
+    keyIdeas: [
+      'White will often execute the Carlsbad structure minority attack (b4-b5).',
+      'Black aims for piece activity on the kingside or breaks with c5/e5.'
+    ],
+    moveCommentary: [
+      { ply: 1, move: 'd4', rationale: 'Claims center space.', enemyPlan: '1...d5 or 1...Nf6.', warning: 'Watch out for hypermodern setups.' },
+      { ply: 2, move: 'd5', rationale: 'Challenges the center directly.', enemyPlan: '2.c4.', warning: 'Defend d5 securely.' },
+      { ply: 3, move: 'c4', rationale: 'The Queen\'s Gambit! Challenges d5 immediately.', enemyPlan: '2...e6 or 2...c6.', warning: 'c4 is unprotected but sacrificing it is temporary.' },
+      { ply: 4, move: 'e6', rationale: 'Queen\'s Gambit Declined. Solidly defends d5.', enemyPlan: '3.Nc3.', warning: 'Blocks the light-squared bishop.' },
+      { ply: 5, move: 'Nc3', rationale: 'Develops and pressures d5.', enemyPlan: '3...Nf6.', warning: 'Prepare for pins from Bb4.' },
+      { ply: 6, move: 'Nf6', rationale: 'Develops kingside knight and defends d5.', enemyPlan: '4.cxd5 or 4.Bg5.', warning: 'Be ready for Bg5 pins.' },
+      { ply: 7, move: 'cxd5', rationale: 'Exchange Variation! Clarifies the center early.', enemyPlan: '4...exd5.', warning: 'Opens the c-file.' },
+      { ply: 8, move: 'exd5', rationale: 'Recaptures and opens the c8-h3 diagonal for the bishop.', enemyPlan: '5.Bg5.', warning: 'Watch out for Carlsbad pawn structures.' },
+      { ply: 9, move: 'Bg5', rationale: 'Pins the f6 knight, putting pressure on Black\'s setup.', enemyPlan: '5...c6 or 5...Be7.', warning: 'Forces Black to make a decision.' },
+      { ply: 10, move: 'c6', rationale: 'Solidifies d5 and prepares to develop the queen.', enemyPlan: '6.e3.', warning: 'Limits the c6 square for the b8 knight.' },
+      { ply: 11, move: 'e3', rationale: 'Solidifies the center and prepares to develop the light-squared bishop.', enemyPlan: '6...Be7.', warning: 'Prepares for slow maneuvering.' }
+    ],
+    candidates: [
+      { san: 'Be7', name: 'Main Line', winW: 39, draw: 44, winB: 17, count: '65,000' },
+      { san: 'Bf5', name: 'Active Bishop', winW: 35, draw: 40, winB: 25, count: '12,000' }
+    ]
+  },
+  {
+    id: 'caro_kann_advance',
+    eco: 'B12',
+    name: 'Caro-Kann Defense: Advance Variation',
+    moves: ['e4', 'c6', 'd4', 'd5', 'e5', 'Bf5', 'Nf3', 'e6', 'Be2', 'c5'],
+    uciSequence: ['e2e4', 'c7c6', 'd2d4', 'd7d5', 'e4e5', 'c8f5', 'g1f3', 'e7e6', 'f1e2', 'c6c5'],
+    description: 'A modern and highly aggressive approach by White against the solid Caro-Kann, gaining space immediately.',
+    keyIdeas: [
+      'White claims a space advantage with the e5 pawn and restricts Black.',
+      'Black develops the light-squared bishop outside the pawn chain before playing e6.'
+    ],
+    moveCommentary: [
+      { ply: 1, move: 'e4', rationale: 'King\'s pawn opening.', enemyPlan: '1...c6.', warning: 'Prepare for asymmetrical structures.' },
+      { ply: 2, move: 'c6', rationale: 'The Caro-Kann Defense! Prepares d5 solidly.', enemyPlan: '2.d4.', warning: 'Passive early on, relies on solid pawn structure.' },
+      { ply: 3, move: 'd4', rationale: 'Seizes the full center.', enemyPlan: '2...d5.', warning: 'Challenges Black to break it.' },
+      { ply: 4, move: 'd5', rationale: 'Strikes back at the center.', enemyPlan: '3.e5 or 3.Nc3.', warning: 'Threatens the e4 pawn.' },
+      { ply: 5, move: 'e5', rationale: 'The Advance Variation! Gains space and cramps Black.', enemyPlan: '3...Bf5.', warning: 'Commits the pawn structure.' },
+      { ply: 6, move: 'Bf5', rationale: 'Develops the bishop outside the pawn chain before playing e6.', enemyPlan: '4.Nf3 or 4.h4.', warning: 'Bishop can be a target.' },
+      { ply: 7, move: 'Nf3', rationale: 'Develops solidly, preparing kingside castling.', enemyPlan: '4...e6.', warning: 'Watch out for Black\'s c5 break.' },
+      { ply: 8, move: 'e6', rationale: 'Solidifies the center and prepares to develop kingside.', enemyPlan: '5.Be2.', warning: 'Locks in the c8 bishop if it wasn\'t out.' },
+      { ply: 9, move: 'Be2', rationale: 'Develops bishop, prepares castling, keeps flexibility.', enemyPlan: '5...c5 or 5...Ne7.', warning: 'Passive but solid.' },
+      { ply: 10, move: 'c5', rationale: 'Strikes at the base of White\'s pawn chain (d4)!', enemyPlan: '6.O-O or 6.Be3.', warning: 'Opens lines.' }
+    ],
+    candidates: [
+      { san: 'O-O', name: 'Castling Main Line', winW: 38, draw: 38, winB: 24, count: '32,000' },
+      { san: 'Be3', name: 'Defending d4', winW: 41, draw: 34, winB: 25, count: '15,000' }
+    ]
+  },
+  {
+    id: 'french_winawer',
+    eco: 'C18',
+    name: 'French Defense: Winawer Variation',
+    moves: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Bb4', 'e5', 'c5', 'a3', 'Bxc3+'],
+    uciSequence: ['e2e4', 'e7e6', 'd2d4', 'd7d5', 'b1c3', 'f8b4', 'e4e5', 'c7c5', 'a2a3', 'b4c3'],
+    description: 'A sharp and complex struggle. Black pins the knight and is willing to trade bishop for knight to damage White\'s pawn structure.',
+    keyIdeas: [
+      'Black creates doubled c-pawns for White.',
+      'White gets the bishop pair and attacking chances on the kingside.'
+    ],
+    moveCommentary: [
+      { ply: 1, move: 'e4', rationale: 'King\'s pawn opening.', enemyPlan: '1...e6.', warning: 'Prepare for closed centers.' },
+      { ply: 2, move: 'e6', rationale: 'The French Defense! Prepares d5 while avoiding open games.', enemyPlan: '2.d4.', warning: 'The light-squared bishop is often blocked.' },
+      { ply: 3, move: 'd4', rationale: 'White takes full central control.', enemyPlan: '2...d5.', warning: 'Must be prepared to defend or advance.' },
+      { ply: 4, move: 'd5', rationale: 'Black challenges the center.', enemyPlan: '3.Nc3, 3.Nd2, or 3.e5.', warning: 'Attacks e4.' },
+      { ply: 5, move: 'Nc3', rationale: 'Develops and defends e4 flexibly.', enemyPlan: '3...Bb4 or 3...Nf6.', warning: 'Allows pins.' },
+      { ply: 6, move: 'Bb4', rationale: 'The Winawer! Pins the knight and threatens to win the e4 pawn.', enemyPlan: '4.e5.', warning: 'Commits to trading the dark-squared bishop.' },
+      { ply: 7, move: 'e5', rationale: 'Gains space and attacks.', enemyPlan: '4...c5.', warning: 'Closes the center.' },
+      { ply: 8, move: 'c5', rationale: 'Strikes at the base of the pawn chain.', enemyPlan: '5.a3.', warning: 'Creates tension.' },
+      { ply: 9, move: 'a3', rationale: 'Forces Black to decide on the pinned bishop.', enemyPlan: '5...Bxc3+.', warning: 'Weakens queenside slightly.' },
+      { ply: 10, move: 'Bxc3+', rationale: 'Black damages White\'s pawn structure, doubling the c-pawns.', enemyPlan: '6.bxc3.', warning: 'Gives up the bishop pair.' }
+    ],
+    candidates: [
+      { san: 'bxc3', name: 'Main Line', winW: 41, draw: 32, winB: 27, count: '28,000' }
+    ]
+  },
+  {
+    id: 'kings_indian',
+    eco: 'E97',
+    name: 'King\'s Indian Defense: Mar del Plata',
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7', 'e4', 'd6', 'Nf3', 'O-O', 'Be2', 'e5', 'O-O', 'Nc6', 'd5', 'Ne7'],
+    uciSequence: ['d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3', 'f8g7', 'e2e4', 'd7d6', 'g1f3', 'e8g8', 'f1e2', 'e7e5', 'e1g1', 'b8c6', 'd4d5', 'c6e7'],
+    description: 'A hypermodern opening where Black allows White a massive pawn center, only to counterattack aggressively, often on the kingside.',
+    keyIdeas: [
+      'White usually attacks on the queenside (c5 break).',
+      'Black launches a pawn storm on the kingside (f5-f4, g5-g4).'
+    ],
+    moveCommentary: [
+      { ply: 1, move: 'd4', rationale: 'Queen\'s pawn opening.', enemyPlan: '1...Nf6.', warning: 'Flexible control.' },
+      { ply: 2, move: 'Nf6', rationale: 'Prevents e4 and keeps options open.', enemyPlan: '2.c4.', warning: 'Hypermodern approach.' },
+      { ply: 3, move: 'c4', rationale: 'Grabs space.', enemyPlan: '2...g6.', warning: 'Prepares Nc3.' },
+      { ply: 4, move: 'g6', rationale: 'Prepares to fianchetto the bishop.', enemyPlan: '3.Nc3.', warning: 'Delays central occupation.' },
+      { ply: 5, move: 'Nc3', rationale: 'Supports e4 and controls d5.', enemyPlan: '3...Bg7.', warning: 'Solid development.' },
+      { ply: 6, move: 'Bg7', rationale: 'King\'s Indian setup. Bishop eyes the long diagonal.', enemyPlan: '4.e4.', warning: 'Ready to castle.' },
+      { ply: 7, move: 'e4', rationale: 'Builds a massive pawn center.', enemyPlan: '4...d6.', warning: 'Beware of overextension.' },
+      { ply: 8, move: 'd6', rationale: 'Controls e5 and prepares to challenge the center.', enemyPlan: '5.Nf3.', warning: 'Restricts the g7 bishop.' },
+      { ply: 9, move: 'Nf3', rationale: 'Classical variation. Develops knight.', enemyPlan: '5...O-O.', warning: 'Solid control.' },
+      { ply: 10, move: 'O-O', rationale: 'King safety.', enemyPlan: '6.Be2.', warning: 'Prepares e5 strike.' },
+      { ply: 11, move: 'Be2', rationale: 'Prepares castling.', enemyPlan: '6...e5.', warning: 'Develops bishop.' },
+      { ply: 12, move: 'e5', rationale: 'Strikes at the center! Challenges d4.', enemyPlan: '7.O-O.', warning: 'Defines the pawn structure.' },
+      { ply: 13, move: 'O-O', rationale: 'White castles safely.', enemyPlan: '7...Nc6.', warning: 'King is secure.' },
+      { ply: 14, move: 'Nc6', rationale: 'Increases pressure on d4.', enemyPlan: '8.d5.', warning: 'Provokes d5 advance.' },
+      { ply: 15, move: 'd5', rationale: 'Closes the center and gains space.', enemyPlan: '8...Ne7.', warning: 'Now White will attack queenside, Black kingside.' },
+      { ply: 16, move: 'Ne7', rationale: 'The Mar del Plata variation! Knight repositions for kingside attack.', enemyPlan: '9.Ne1 or 9.b4.', warning: 'Prepares f5 break.' }
+    ],
+    candidates: [
+      { san: 'b4', name: 'Bayonet Attack', winW: 41, draw: 30, winB: 29, count: '14,000' },
+      { san: 'Ne1', name: 'Classical Main Line', winW: 39, draw: 31, winB: 30, count: '18,500' }
+    ]
+  },
+  {
+    id: 'nimzo_indian',
+    eco: 'E50',
+    name: 'Nimzo-Indian Defense',
+    moves: ['d4', 'Nf6', 'c4', 'e6', 'Nc3', 'Bb4'],
+    uciSequence: ['d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4'],
+    description: 'One of Black\'s most respected defenses against 1.d4. Black pins the c3 knight, fighting for center control with pieces rather than pawns.',
+    keyIdeas: [
+      'Control of e4 is a key battleground.',
+      'Black often trades bishop for knight to give White doubled c-pawns.'
+    ],
+    moveCommentary: [
+      { ply: 1, move: 'd4', rationale: 'Queen\'s pawn opening.', enemyPlan: '1...Nf6.', warning: 'Hypermodern responses likely.' },
+      { ply: 2, move: 'Nf6', rationale: 'Prevents e4.', enemyPlan: '2.c4.', warning: 'Maintains flexibility.' },
+      { ply: 3, move: 'c4', rationale: 'Grabs space.', enemyPlan: '2...e6.', warning: 'Supports d5 control.' },
+      { ply: 4, move: 'e6', rationale: 'Prepares to develop the dark-squared bishop.', enemyPlan: '3.Nc3.', warning: 'Solid preparation.' },
+      { ply: 5, move: 'Nc3', rationale: 'Prepares e4.', enemyPlan: '3...Bb4.', warning: 'The critical test.' },
+      { ply: 6, move: 'Bb4', rationale: 'The Nimzo-Indian! Pins the knight and stops e4.', enemyPlan: '4.e3 or 4.Qc2.', warning: 'Willing to give up the bishop pair.' }
+    ],
+    candidates: [
+      { san: 'e3', name: 'Rubinstein System', winW: 35, draw: 43, winB: 22, count: '65,000' },
+      { san: 'Qc2', name: 'Classical Variation', winW: 37, draw: 40, winB: 23, count: '48,000' },
+      { san: 'Nf3', name: 'Kasparov Variation', winW: 36, draw: 44, winB: 20, count: '29,000' }
+    ]
+  },
+
+  {
     id: 'sicilian_najdorf',
     eco: 'B90',
     name: 'Sicilian Defense: Najdorf Variation',
