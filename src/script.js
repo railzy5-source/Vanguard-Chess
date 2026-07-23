@@ -56,23 +56,6 @@ class VanguardChessApp {
     this.mainLineBoard = null;
     this.branchBoard = null;
 
-    // Real-Time Multiplayer State
-    this.multiplayerSocket = null;
-    this.multiplayerRoom = null;
-    this.multiplayerColor = null; // 'white' or 'black' or 'spectator'
-    this.multiplayerActive = false;
-
-    // Buttplug.io Sensory Link State
-    this.buttplugClient = null;
-    this.buttplugDevices = [];
-    this.buttplugConnected = false;
-    this.buttplugVibeTimer = null;
-    this.vibeIntensityThinking = 0.15; // 15% default
-    this.vibeIntensityOvertime = 0.65; // 65% default
-    this.vibeThresholdSeconds = 15; // 15 seconds default
-    this.turnStartTime = null;
-    this.vibeActiveState = 'off';
-
     this.init();
   }
 
@@ -141,7 +124,6 @@ class VanguardChessApp {
     } else {
       this.updateBestMoveArrows();
     }
-    this.initSensoryMultiplayer();
   }
 
   renderClockTick(state) {
@@ -173,6 +155,7 @@ class VanguardChessApp {
     const winner = timeoutColor === 'w' ? 'Black' : 'White';
     const loser = timeoutColor === 'w' ? 'White' : 'Black';
     this.updateTurnIndicator(`Time Out! ${winner} wins on time!`);
+    this.showGameOverModal(`${winner} Wins!`, 'On Time');
     this.coach.speak(`Time ran out for ${loser}! What a tense speed chess battle!`, 'surprised');
   }
 
@@ -513,17 +496,6 @@ class VanguardChessApp {
   async handlePlayerMove(move) {
     if (!this.gameActive) return;
 
-    // In multiplayer mode, block moves if it is not our turn or if we are a spectator!
-    if (this.multiplayerActive) {
-      const activeColorLetter = this.game.turn(); // 'w' or 'b'
-      const ourColorLetter = this.multiplayerColor === 'white' ? 'w' : (this.multiplayerColor === 'black' ? 'b' : null);
-      if (activeColorLetter !== ourColorLetter) {
-        this.gameBoard.renderBoard();
-        this.coach.speak("It's not your turn yet in this multiplayer battle!", "surprised");
-        return;
-      }
-    }
-
     if (!this.clock.activeColor) {
       this.clock.startTimer('w');
     } else {
@@ -630,20 +602,6 @@ class VanguardChessApp {
     this.updateOpeningDisplay();
     this.gameBoard.clearArrows();
 
-    // Broadcast multiplayer move if active
-    if (this.multiplayerActive && this.multiplayerSocket && this.multiplayerSocket.readyState === WebSocket.OPEN) {
-      this.multiplayerSocket.send(JSON.stringify({
-        type: "move",
-        move: {
-          from: move.from,
-          to: move.to,
-          promotion: move.promotion || 'q',
-          san: move.san
-        },
-        fen: this.game.fen()
-      }));
-    }
-
     // Check game over
     if (this.checkGameOver()) {
       this.clock.stopTimer();
@@ -663,20 +621,15 @@ class VanguardChessApp {
       openingName: classification === 'Book' ? matchedOpeningName : undefined
     });
 
-    // AI Turn (Only if NOT in multiplayer mode)
-    if (!this.multiplayerActive) {
-      const isAiTurn = (this.playerColor === 'white' && this.game.turn() === 'b') ||
-                       (this.playerColor === 'black' && this.game.turn() === 'w');
+    // AI Turn
+    const isAiTurn = (this.playerColor === 'white' && this.game.turn() === 'b') ||
+                     (this.playerColor === 'black' && this.game.turn() === 'w');
 
-      if (isAiTurn) {
-        // 1.8 second delay so player has time to listen to Naomi explain their move first!
-        setTimeout(() => this.triggerAiMove(), 1800);
-      } else if (this.settings.showArrows) {
-        this.updateBestMoveArrows();
-      }
-    } else {
-      // In multiplayer mode, our turn ends. Stop local vibration.
-      this.stopVibration();
+    if (isAiTurn) {
+      // 1.8 second delay so player has time to listen to Naomi explain their move first!
+      setTimeout(() => this.triggerAiMove(), 1800);
+    } else if (this.settings.showArrows) {
+      this.updateBestMoveArrows();
     }
   }
 
@@ -777,6 +730,48 @@ class VanguardChessApp {
     this.gameBoard.setArrows(arrows);
   }
 
+  showGameOverModal(title, subtitle) {
+    const existing = document.getElementById('game-over-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'game-over-modal';
+    overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300';
+    
+    const modal = document.createElement('div');
+    modal.className = 'bg-[#16161a] border border-[#2a2a2e] p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 transform scale-95 transition-transform duration-300 max-w-sm w-full mx-4 text-center';
+
+    const titleEl = document.createElement('h2');
+    titleEl.className = 'text-3xl font-black text-white tracking-wide';
+    titleEl.textContent = title;
+
+    const subEl = document.createElement('p');
+    subEl.className = 'text-zinc-400 font-medium';
+    subEl.textContent = subtitle;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'mt-4 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors';
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = () => {
+      overlay.classList.remove('opacity-100');
+      overlay.classList.add('opacity-0');
+      setTimeout(() => overlay.remove(), 300);
+    };
+
+    modal.appendChild(titleEl);
+    modal.appendChild(subEl);
+    modal.appendChild(closeBtn);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => {
+      overlay.classList.remove('opacity-0');
+      overlay.classList.add('opacity-100');
+      modal.classList.remove('scale-95');
+      modal.classList.add('scale-100');
+    });
+  }
+
   /**
    * Check if game has concluded (checkmate, draw, stalemate)
    */
@@ -786,19 +781,18 @@ class VanguardChessApp {
       this.gameBoard.setInteractive(false);
 
       let resultText = 'Game Over';
-      let title = 'Game Over';
+      let subtitle = 'The game has ended.';
       if (this.game.isCheckmate()) {
         const winner = this.game.turn() === 'w' ? 'Black' : 'White';
-        title = 'Checkmate!';
-        resultText = `${winner} wins by checkmate!`;
+        resultText = `${winner} Wins!`;
+        subtitle = 'By Checkmate';
       } else if (this.game.isDraw()) {
-        title = 'Draw!';
-        resultText = 'The game ended in a draw (stalemate, repetition, or insufficient material).';
+        resultText = 'Draw';
+        subtitle = 'By stalemate or repetition';
       }
 
       this.updateTurnIndicator(resultText);
-      this.showGameOverModal(title, resultText);
-      this.stopVibration();
+      this.showGameOverModal(resultText, subtitle);
       return true;
     }
     this.updateTurnIndicator();
@@ -887,6 +881,8 @@ class VanguardChessApp {
     this.gameActive = false;
     this.gameBoard.setInteractive(false);
     this.updateTurnIndicator('Resigned');
+    const winner = this.playerColor === 'white' ? 'Black' : 'White';
+    this.showGameOverModal(`${winner} Wins!`, 'By Resignation');
     this.coach.reactToResign();
   }
 
@@ -1871,463 +1867,6 @@ class VanguardChessApp {
         return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${cp >= 0 ? '#10b981' : '#ef4444'}" stroke="#0d0d0f" stroke-width="1.5"/>`;
       }).join('')}
     `;
-  }
-
-  /**
-   * Initialize real-time multiplayer arena and sensory teledildonics controls
-   */
-  initSensoryMultiplayer() {
-    // Multiplayer Join Button
-    document.getElementById('multiplayer-btn-join')?.addEventListener('click', () => {
-      const codeInput = document.getElementById('multiplayer-room-input');
-      const code = codeInput ? codeInput.value.toUpperCase().trim() : 'CHESS1';
-      if (code) {
-        this.joinMultiplayerRoom(code);
-      }
-    });
-
-    // Multiplayer Create Button
-    document.getElementById('multiplayer-btn-create')?.addEventListener('click', () => {
-      // Generate a random 5-character alphanumeric room code
-      const code = Math.random().toString(36).substring(2, 7).toUpperCase();
-      const codeInput = document.getElementById('multiplayer-room-input');
-      if (codeInput) codeInput.value = code;
-      this.joinMultiplayerRoom(code);
-    });
-
-    // Multiplayer Leave Button
-    document.getElementById('multiplayer-btn-leave')?.addEventListener('click', () => {
-      this.leaveMultiplayerRoom();
-    });
-
-    // Toy Connect Button
-    document.getElementById('toy-btn-connect')?.addEventListener('click', () => {
-      this.connectButtplugServer();
-    });
-
-    // Toy Scan Button
-    document.getElementById('toy-btn-scan')?.addEventListener('click', () => {
-      this.scanForToys();
-    });
-
-    // Toy Test Button
-    document.getElementById('toy-btn-test')?.addEventListener('click', () => {
-      this.testVibration();
-    });
-
-    // Toy Stop Button
-    document.getElementById('toy-btn-stop')?.addEventListener('click', () => {
-      this.emergencyStopToys();
-    });
-
-    // Toy Sliders
-    const slideThinking = document.getElementById('toy-slide-thinking');
-    if (slideThinking) {
-      slideThinking.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value);
-        const label = document.getElementById('toy-val-thinking');
-        if (label) label.textContent = val + '%';
-        this.vibeIntensityThinking = val / 100;
-      });
-    }
-
-    const slideOvertime = document.getElementById('toy-slide-overtime');
-    if (slideOvertime) {
-      slideOvertime.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value);
-        const label = document.getElementById('toy-val-overtime');
-        if (label) label.textContent = val + '%';
-        this.vibeIntensityOvertime = val / 100;
-      });
-    }
-
-    const slideThreshold = document.getElementById('toy-slide-threshold');
-    if (slideThreshold) {
-      slideThreshold.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value);
-        const label = document.getElementById('toy-val-threshold');
-        if (label) label.textContent = val + 's';
-        this.vibeThresholdSeconds = val;
-      });
-    }
-
-    // Game Over Close Button
-    document.getElementById('game-over-btn-close')?.addEventListener('click', () => {
-      document.getElementById('game-over-modal')?.classList.add('hidden');
-    });
-  }
-
-  /**
-   * Join a room in the multiplayer lobby
-   */
-  joinMultiplayerRoom(code) {
-    if (this.multiplayerSocket) {
-      this.multiplayerSocket.close();
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-    
-    this.coach.speak(`Connecting to Chess multiplayer arena room: ${code}... ⚔️`, 'happy');
-
-    const socket = new WebSocket(wsUrl);
-    this.multiplayerSocket = socket;
-
-    socket.onopen = () => {
-      console.log('Connected to multiplayer socket server');
-      socket.send(JSON.stringify({
-        type: 'join',
-        roomCode: code
-      }));
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'joined') {
-          this.multiplayerActive = true;
-          this.multiplayerRoom = data.roomCode;
-          this.multiplayerColor = data.color;
-          this.playerColor = data.color === 'spectator' ? 'white' : data.color;
-          this.gameActive = true;
-          this.game.load(data.fen);
-          this.gameBoard.setChessGame(this.game);
-          this.gameBoard.setOrientation(this.playerColor);
-          this.gameBoard.setInteractive(data.color !== 'spectator');
-
-          this.clock.stopTimer();
-
-          // Update Room UI
-          const statusDot = document.getElementById('multiplayer-status-dot');
-          if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-
-          const detailsPanel = document.getElementById('multiplayer-details-panel');
-          if (detailsPanel) detailsPanel.classList.remove('hidden');
-
-          const detailRoom = document.getElementById('multiplayer-detail-room');
-          if (detailRoom) detailRoom.textContent = data.roomCode;
-
-          const detailColor = document.getElementById('multiplayer-detail-color');
-          if (detailColor) {
-            detailColor.textContent = data.color.toUpperCase();
-            if (data.color === 'white') detailColor.className = 'font-bold text-emerald-400 uppercase';
-            else if (data.color === 'black') detailColor.className = 'font-bold text-pink-400 uppercase';
-            else detailColor.className = 'font-bold text-zinc-400 uppercase';
-          }
-
-          const detailOpponent = document.getElementById('multiplayer-detail-opponent');
-          if (detailOpponent) detailOpponent.textContent = data.hasOpponent ? 'Connected' : 'Waiting...';
-
-          if (data.color === 'spectator') {
-            this.coach.speak(`Spectating room ${data.roomCode}! ♟️`, 'happy');
-          } else {
-            this.coach.speak(`Joined room ${data.roomCode} as ${data.color.toUpperCase()}! Ready to battle.`, 'happy');
-            this.turnStartTime = Date.now();
-          }
-        } else if (data.type === 'room_update') {
-          const detailOpponent = document.getElementById('multiplayer-detail-opponent');
-          if (detailOpponent) detailOpponent.textContent = data.hasOpponent ? 'Connected' : 'Waiting...';
-          
-          if (data.playerJoined) {
-            this.coach.speak(`A player connected as ${data.playerJoined}!`, 'happy');
-          } else if (data.playerLeft) {
-            this.coach.speak(`Player ${data.playerLeft} disconnected.`, 'surprised');
-          }
-        } else if (data.type === 'move') {
-          if (data.senderColor !== this.multiplayerColor) {
-            this.game.move({ from: data.move.from, to: data.move.to, promotion: data.move.promotion });
-            this.gameBoard.setLastMove(data.move.from, data.move.to);
-            this.gameBoard.renderBoard();
-            this.updateMoveTable();
-            this.updateCapturedPieces();
-            this.updateTimelineProgress();
-
-            this.coach.reactToMove({
-              san: data.move.san,
-              isCheck: this.game.inCheck(),
-              isCheckmate: this.game.isCheckmate(),
-              isPlayer: false
-            });
-
-            if (this.checkGameOver()) {
-              this.clock.stopTimer();
-            } else {
-              // Reset our turn clock and start vibe monitor
-              this.turnStartTime = Date.now();
-            }
-          }
-        } else if (data.type === 'reset') {
-          this.game.load(data.fen);
-          this.gameBoard.setChessGame(this.game);
-          this.gameBoard.setLastMove(null, null);
-          this.gameBoard.renderBoard();
-          this.moveHistory = [];
-          this.updateMoveTable();
-          this.coach.speak('Multiplayer match reset!', 'happy');
-        }
-      } catch (err) {
-        console.error('Multiplayer message handler error:', err);
-      }
-    };
-
-    socket.onclose = () => {
-      this.leaveMultiplayerRoom();
-    };
-
-    socket.onerror = (err) => {
-      console.error('Multiplayer socket error:', err);
-      this.coach.speak(' Lobbby connection failed. Make sure server is running.', 'surprised');
-    };
-  }
-
-  /**
-   * Leave multiplayer mode
-   */
-  leaveMultiplayerRoom() {
-    this.multiplayerActive = false;
-    this.multiplayerRoom = null;
-    this.multiplayerColor = null;
-    this.stopVibration();
-
-    if (this.multiplayerSocket) {
-      try {
-        this.multiplayerSocket.close();
-      } catch (e) {}
-      this.multiplayerSocket = null;
-    }
-
-    const statusDot = document.getElementById('multiplayer-status-dot');
-    if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-zinc-600';
-
-    const detailsPanel = document.getElementById('multiplayer-details-panel');
-    if (detailsPanel) detailsPanel.classList.add('hidden');
-
-    this.gameBoard.setInteractive(true);
-    this.coach.speak('Returned to offline chess play against Naomi AI!', 'happy');
-  }
-
-  /**
-   * Connect to Intiface Central / Buttplug.io WebSocket server
-   */
-  async connectButtplugServer() {
-    const urlInput = document.getElementById('toy-server-url');
-    const wsUrl = urlInput ? urlInput.value.trim() : 'ws://127.0.0.1:12345';
-
-    this.coach.speak(`Linking with local Intiface server at ${wsUrl}... 🔌`, 'happy');
-
-    try {
-      if (!window.Buttplug) {
-        this.coach.speak('Buttplug client library not detected on the page.', 'surprised');
-        return;
-      }
-
-      const client = new window.Buttplug.ButtplugClient('Vanguard Sensory Client');
-      this.buttplugClient = client;
-
-      client.addListener('deviceadded', (device) => {
-        this.coach.speak(`Sensory toy successfully connected: ${device.name}! Ready to vibrate on turns. 💓`, 'flirty');
-        this.updateButtplugDevicesList();
-      });
-
-      client.addListener('deviceremoved', (device) => {
-        this.coach.speak(`Sensory toy disconnected: ${device.name}.`, 'surprised');
-        this.updateButtplugDevicesList();
-      });
-
-      const connector = new window.Buttplug.ButtplugBrowserWebsocketClientConnector(wsUrl);
-      await client.connect(connector);
-
-      this.buttplugConnected = true;
-
-      const dot = document.getElementById('toy-status-dot');
-      if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-
-      const panel = document.getElementById('toy-control-panel');
-      if (panel) panel.classList.remove('hidden');
-
-      this.coach.speak('Connected to Intiface! Please run a scan to pair your devices.', 'happy');
-      this.updateButtplugDevicesList();
-
-      this.startVibrationMonitorLoop();
-    } catch (err) {
-      console.warn('Buttplug connection failure:', err);
-      this.coach.speak('Failed to connect to local Intiface server. Verify that Intiface is running on port 12345.', 'surprised');
-    }
-  }
-
-  /**
-   * Start Bluetooth discovery scan for Buttplug.io devices
-   */
-  async scanForToys() {
-    if (!this.buttplugClient || !this.buttplugConnected) return;
-    this.coach.speak('Scanning for local Bluetooth sensory toys... 📡', 'happy');
-    try {
-      await this.buttplugClient.startScanning();
-      setTimeout(async () => {
-        try {
-          await this.buttplugClient.stopScanning();
-        } catch (e) {}
-      }, 5000);
-    } catch (err) {
-      console.error('Scan error:', err);
-    }
-  }
-
-  /**
-   * Update the listed Buttplug devices inside the panel
-   */
-  updateButtplugDevicesList() {
-    const listEl = document.getElementById('toy-devices-list');
-    if (!listEl) return;
-
-    if (!this.buttplugClient) {
-      listEl.innerHTML = '<div class="text-[10px] text-zinc-500 italic py-1 text-center">No client.</div>';
-      return;
-    }
-
-    const devices = this.buttplugClient.devices || [];
-    this.buttplugDevices = devices;
-
-    if (devices.length === 0) {
-      listEl.innerHTML = '<div class="text-[10px] text-zinc-500 italic py-1 text-center">No toys connected yet. Run a scan.</div>';
-    } else {
-      listEl.innerHTML = '';
-      devices.forEach(dev => {
-        const item = document.createElement('div');
-        item.className = 'flex justify-between items-center bg-[#16161a] p-1.5 rounded border border-[#2a2a2e] mb-1';
-        item.innerHTML = `
-          <span class="font-bold text-[10px] text-zinc-300 truncate max-w-[140px]">${dev.name}</span>
-          <span class="text-[9px] bg-pink-500/10 text-pink-400 px-1.5 py-0.5 rounded border border-pink-500/20 font-mono font-bold">VIBE</span>
-        `;
-        listEl.appendChild(item);
-      });
-    }
-  }
-
-  /**
-   * Run a brief test pulse on connected devices
-   */
-  async testVibration() {
-    if (this.buttplugDevices.length === 0) {
-      this.coach.speak('Please scan and pair a toy before running a pulse test!', 'surprised');
-      return;
-    }
-    this.coach.speak('Triggering 1-second pulse test... ⚡', 'happy');
-    await this.setVibeIntensityOnDevices(0.5);
-    setTimeout(async () => {
-      await this.setVibeIntensityOnDevices(0);
-    }, 1000);
-  }
-
-  /**
-   * Stop all vibration immediately (emergency stop)
-   */
-  async emergencyStopToys() {
-    this.coach.speak('All connected sensory toys stopped. 🛑', 'happy');
-    await this.setVibeIntensityOnDevices(0);
-  }
-
-  /**
-   * Write vibration intensity to all connected devices
-   */
-  async setVibeIntensityOnDevices(intensity) {
-    if (!this.buttplugConnected) return;
-    const devices = this.buttplugDevices || [];
-    for (const dev of devices) {
-      try {
-        if (typeof dev.vibrate === 'function') {
-          await dev.vibrate(intensity);
-        } else if (typeof dev.scalar === 'function') {
-          await dev.scalar({ v: intensity, act: 'Vibrate' });
-        }
-      } catch (err) {
-        console.warn('Vibe speed command rejected on device:', dev.name, err);
-      }
-    }
-  }
-
-  /**
-   * Start interval monitor loop for turn detection and adaptive thinking vibration
-   */
-  startVibrationMonitorLoop() {
-    if (this.buttplugVibeTimer) return;
-
-    this.buttplugVibeTimer = setInterval(async () => {
-      if (!this.buttplugConnected || this.buttplugDevices.length === 0) return;
-
-      if (!this.gameActive) {
-        await this.setVibeIntensityOnDevices(0);
-        return;
-      }
-
-      // Check if it is currently our turn
-      let isOurTurn = false;
-      if (this.multiplayerActive) {
-        const turn = this.game.turn(); // 'w' or 'b'
-        const playerColorLetter = this.multiplayerColor === 'white' ? 'w' : (this.multiplayerColor === 'black' ? 'b' : null);
-        isOurTurn = turn === playerColorLetter;
-      } else {
-        const turn = this.game.turn();
-        isOurTurn = turn === (this.playerColor === 'white' ? 'w' : 'b');
-      }
-
-      if (!isOurTurn) {
-        await this.setVibeIntensityOnDevices(0);
-        this.vibeActiveState = 'off';
-        return;
-      }
-
-      // It is our turn! Calculate elapsed thinking time
-      if (!this.turnStartTime) {
-        this.turnStartTime = Date.now();
-      }
-
-      const elapsed = (Date.now() - this.turnStartTime) / 1000;
-
-      if (elapsed < this.vibeThresholdSeconds) {
-        // Normal thinking vibration
-        await this.setVibeIntensityOnDevices(this.vibeIntensityThinking);
-        this.vibeActiveState = 'thinking';
-      } else {
-        // Taking too long! High intensity vibration
-        await this.setVibeIntensityOnDevices(this.vibeIntensityOvertime);
-        this.vibeActiveState = 'overtime';
-      }
-    }, 1000);
-  }
-
-  /**
-   * Reset local vibration states
-   */
-  stopVibration() {
-    this.turnStartTime = null;
-    this.setVibeIntensityOnDevices(0).catch(() => {});
-  }
-
-  /**
-   * Show custom game-over popup announcement modal
-   */
-  showGameOverModal(title, text) {
-    const modal = document.getElementById('game-over-modal');
-    const titleEl = document.getElementById('game-over-title');
-    const textEl = document.getElementById('game-over-text');
-    const iconEl = document.getElementById('game-over-icon');
-
-    if (modal) {
-      if (titleEl) titleEl.textContent = title;
-      if (textEl) textEl.textContent = text;
-      
-      // Select icon based on victory/draw
-      if (iconEl) {
-        if (title.toLowerCase().includes('mate')) {
-          iconEl.textContent = '👑';
-        } else {
-          iconEl.textContent = '🤝';
-        }
-      }
-
-      modal.classList.remove('hidden');
-    }
   }
 }
 

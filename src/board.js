@@ -262,30 +262,23 @@ export class ChessBoardUI {
 
     const theme = BOARD_THEMES[this.boardTheme] || BOARD_THEMES.wood;
 
+    const isCheck = typeof this.chessGame.isCheck === 'function' ? this.chessGame.isCheck() : this.chessGame.inCheck();
+    const turnColor = this.chessGame.turn();
+    let checkAttackers = [];
     let kingSquare = null;
-    let checkers = [];
-    try {
-      if (this.chessGame.inCheck()) {
-        const turn = this.chessGame.turn();
-        for (let r_ = 0; r_ < 8; r_++) {
-          for (let c_ = 0; c_ < 8; c_++) {
-            const p = boardState[r_][c_];
-            if (p && p.type === 'k' && p.color === turn) {
-              kingSquare = String.fromCharCode(97 + c_) + (8 - r_);
-              break;
-            }
-          }
-          if (kingSquare) break;
-        }
 
-        if (typeof this.chessGame.checkers === 'function') {
-          checkers = this.chessGame.checkers();
-        } else if (typeof this.chessGame.getCheckers === 'function') {
-          checkers = this.chessGame.getCheckers();
+    if (isCheck) {
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (boardState[r][c] && boardState[r][c].type === 'k' && boardState[r][c].color === turnColor) {
+            kingSquare = String.fromCharCode(97 + c) + (8 - r);
+          }
         }
       }
-    } catch (err) {
-      console.warn('Error identifying check states:', err);
+      if (kingSquare && typeof this.chessGame.attackers === 'function') {
+        const attackerColor = turnColor === 'w' ? 'b' : 'w';
+        checkAttackers = this.chessGame.attackers(kingSquare, attackerColor);
+      }
     }
 
     for (let r = 0; r < 8; r++) {
@@ -307,13 +300,11 @@ export class ChessBoardUI {
           squareDiv.style.backgroundColor = isDark ? '#3b82f6aa' : '#60a5faaa';
         }
 
-        // Check outlines
-        if (squareName === kingSquare) {
-          squareDiv.classList.add('ring-4', 'ring-red-500', 'ring-offset-2', 'z-10', 'animate-pulse');
-          squareDiv.style.backgroundColor = isDark ? '#ef4444aa' : '#f87171aa';
-        } else if (checkers.includes(squareName)) {
-          squareDiv.classList.add('ring-2', 'ring-orange-500', 'z-10', 'animate-pulse');
-          squareDiv.style.backgroundColor = isDark ? '#f9731688' : '#fb923c88';
+        // Check highlight (king and attackers)
+        if (isCheck && (squareName === kingSquare || checkAttackers.includes(squareName))) {
+          const checkHl = document.createElement('div');
+          checkHl.className = 'absolute inset-0 bg-red-600/40 ring-4 ring-red-500 pointer-events-none z-20 animate-pulse';
+          squareDiv.appendChild(checkHl);
         }
 
         // User right-click highlight

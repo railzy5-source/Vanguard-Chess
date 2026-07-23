@@ -94,110 +94,6 @@
                 </button>
               </div>
             </div>
-
-            <!-- Multiplayer Arena Card -->
-            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-4 flex flex-col gap-3 shadow-lg">
-              <div class="flex items-center justify-between">
-                <h3 class="text-xs uppercase text-zinc-500 font-bold tracking-widest">Multiplayer Arena</h3>
-                <span id="multiplayer-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
-              </div>
-              <p class="text-[10px] text-zinc-400">Play real-time synced chess against another player over WebSockets.</p>
-              
-              <div class="flex flex-col gap-2">
-                <div class="flex gap-2">
-                  <input type="text" id="multiplayer-room-input" placeholder="ROOM_CODE" value="" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500 w-full uppercase" />
-                  <button id="multiplayer-btn-join" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap">
-                    Join
-                  </button>
-                </div>
-                <button id="multiplayer-btn-create" class="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[10px] rounded-lg transition-colors cursor-pointer border border-zinc-700 uppercase tracking-widest mt-1">
-                  Create New Room
-                </button>
-                <div id="multiplayer-details-panel" class="hidden flex flex-col gap-1.5 bg-[#0d0d0f] p-2.5 rounded-lg border border-[#2a2a2e] text-xs mt-1">
-                  <div class="flex justify-between"><span class="text-zinc-500">Room:</span> <span id="multiplayer-detail-room" class="font-mono text-zinc-300">NONE</span></div>
-                  <div class="flex justify-between"><span class="text-zinc-500">Color:</span> <span id="multiplayer-detail-color" class="font-bold text-blue-400 uppercase">SPECTATOR</span></div>
-                  <div class="flex justify-between"><span class="text-zinc-500">Opponent:</span> <span id="multiplayer-detail-opponent" class="text-zinc-300">Waiting...</span></div>
-                  <button id="multiplayer-btn-leave" class="mt-2 w-full py-1 bg-red-900/20 hover:bg-red-900/30 text-red-400 border border-red-900/40 rounded-md text-[10px] font-bold transition-colors cursor-pointer">
-                    Leave Multiplayer Mode
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Sensory Toy Link Card (Buttplug.io) -->
-            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-4 flex flex-col gap-3 shadow-lg">
-              <div class="flex items-center justify-between">
-                <h3 class="text-xs uppercase text-zinc-500 font-bold tracking-widest">Sensory Toy Link</h3>
-                <span id="toy-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
-              </div>
-              <p class="text-[10px] text-zinc-400">Sync local Buttplug.io devices. Current player's toy vibrates during turn.</p>
-
-              <div class="text-[10px] text-zinc-400 bg-pink-900/10 border border-pink-900/30 p-2.5 rounded flex flex-col gap-1">
-                <p class="font-bold text-pink-400">How to connect toys:</p>
-                <ol class="list-decimal ml-4 space-y-1">
-                  <li>Download & open <a href="https://intiface.com/central/" target="_blank" class="text-pink-300 hover:underline font-semibold">Intiface Central</a></li>
-                  <li>Click <b>"Start Server"</b> in the Intiface app</li>
-                  <li>Click <b>"Connect"</b> below</li>
-                  <li>Turn on your Bluetooth toy & click <b>"Scan for Toys"</b></li>
-                </ol>
-              </div>
-              
-              <div class="flex flex-col gap-2">
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Intiface Server URL</label>
-                  <div class="flex gap-2">
-                    <input type="text" id="toy-server-url" value="ws://127.0.0.1:12345" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-pink-500 w-full" />
-                    <button id="toy-btn-connect" class="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap">
-                      Connect
-                    </button>
-                  </div>
-                </div>
-
-                <div id="toy-control-panel" class="hidden flex flex-col gap-2 bg-[#0d0d0f] p-2.5 rounded-lg border border-[#2a2a2e] text-xs">
-                  <div class="flex justify-between items-center pb-1 border-b border-[#2a2a2e]">
-                    <span class="text-zinc-400 font-bold">Devices</span>
-                    <button id="toy-btn-scan" class="text-[10px] text-pink-400 hover:text-pink-300 font-bold">Scan for Toys</button>
-                  </div>
-                  <div id="toy-devices-list" class="text-[10px] text-zinc-500 italic py-1 text-center">No toys connected yet. Run a scan.</div>
-
-                  <!-- Adjustable Intensities -->
-                  <div class="space-y-2 pt-1 border-t border-[#2a2a2e]">
-                    <div>
-                      <div class="flex justify-between text-[10px] text-zinc-400 font-semibold mb-1">
-                        <span>Thinking Vibe Level</span>
-                        <span id="toy-val-thinking" class="text-pink-400">15%</span>
-                      </div>
-                      <input type="range" id="toy-slide-thinking" min="0" max="100" value="15" class="w-full accent-pink-500 cursor-pointer h-1 bg-zinc-800 rounded-lg appearance-none" />
-                    </div>
-
-                    <div>
-                      <div class="flex justify-between text-[10px] text-zinc-400 font-semibold mb-1">
-                        <span>Overtime Vibe Level</span>
-                        <span id="toy-val-overtime" class="text-pink-400">65%</span>
-                      </div>
-                      <input type="range" id="toy-slide-overtime" min="0" max="100" value="65" class="w-full accent-pink-500 cursor-pointer h-1 bg-zinc-800 rounded-lg appearance-none" />
-                    </div>
-
-                    <div>
-                      <div class="flex justify-between text-[10px] text-zinc-400 font-semibold mb-1">
-                        <span>Overtime Threshold</span>
-                        <span id="toy-val-threshold" class="text-pink-400">15s</span>
-                      </div>
-                      <input type="range" id="toy-slide-threshold" min="5" max="60" step="5" value="15" class="w-full accent-pink-500 cursor-pointer h-1 bg-zinc-800 rounded-lg appearance-none" />
-                    </div>
-                  </div>
-
-                  <div class="flex gap-2 pt-2 border-t border-[#2a2a2e]">
-                    <button id="toy-btn-test" class="w-full py-1 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded text-[10px] font-bold transition-all">
-                      Test 1s Pulse ⚡
-                    </button>
-                    <button id="toy-btn-stop" class="w-full py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-[10px] font-bold transition-all">
-                      Emergency Stop 🛑
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </aside>
 
           <!-- CENTER COLUMN: Interactive Board & Controls (lg:col-span-6) -->
@@ -805,25 +701,11 @@
 
     </main>
 
-    <!-- GAME OVER MODAL OVERLAY -->
-    <div id="game-over-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 hidden transition-opacity duration-300">
-      <div class="bg-[#16161a] border border-[#2a2a2e] rounded-2xl p-6 max-w-sm w-full flex flex-col items-center text-center shadow-2xl mx-4">
-        <div id="game-over-icon" class="text-4xl mb-3">🏆</div>
-        <h2 id="game-over-title" class="text-lg font-bold text-zinc-100 tracking-wide mb-1">Checkmate!</h2>
-        <p id="game-over-text" class="text-xs text-zinc-400 mb-6">White has won the game!</p>
-        <button id="game-over-btn-close" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">
-          GREAT GAME!
-        </button>
-      </div>
-    </div>
-
     <!-- Footer -->
     <footer class="mt-auto border-t border-[#2a2a2e] bg-[#16161a] py-3 px-4 text-center text-xs text-zinc-500">
       Vanguard Chess Academy • Sleek Interface Theme • Powered by Stockfish & chess.js
     </footer>
 
-    <!-- Buttplug.io Client Library -->
-    <script src="https://cdn.jsdelivr.net/npm/buttplug@3.0.0/dist/web/buttplug.min.js"></script>
     <!-- App Main Script -->
     <script type="module" src="/src/script.js"></script>
   </body>
