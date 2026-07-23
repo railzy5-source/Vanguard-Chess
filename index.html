@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vanguard Chess Academy - AI Interactive Chess & Decision Tree</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="bg-[#0d0d0f] text-[#e0e0e6] font-sans antialiased min-h-screen flex flex-col">
+    <!-- Top Navigation Header -->
+    <header class="h-16 flex items-center justify-between px-6 bg-[#16161a] border-b border-[#2a2a2e] shadow-xl sticky top-0 z-40">
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-pink-600 via-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg ring-2 ring-pink-500/30">
+          <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-5-4 5-6-7z"/><path d="M5 20h14"/></svg>
+        </div>
+        <div>
+          <span class="font-extrabold tracking-tight text-lg text-white block leading-none">VANGUARD <span class="theme-accent-text font-bold">CHESS</span></span>
+          <span class="text-[10px] text-zinc-400 font-semibold tracking-wider">AI GRANDMASTER ENGINE</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex space-x-1.5 overflow-x-auto py-1 max-w-full">
+        <button data-tab="play" class="nav-tab px-4 py-2 rounded-lg bg-[#252529] theme-accent-text font-bold border border-[#3a3a3e] cursor-pointer transition-all shadow-sm flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+          Play
+        </button>
+        <button data-tab="puzzles" class="nav-tab px-4 py-2 rounded-lg hover:bg-[#1f1f23] text-zinc-400 hover:text-zinc-200 font-medium cursor-pointer transition-colors flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+          Puzzles
+        </button>
+        <button data-tab="review" class="nav-tab px-4 py-2 rounded-lg hover:bg-[#1f1f23] text-zinc-400 hover:text-zinc-200 font-medium cursor-pointer transition-colors flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+          Review & Graph
+        </button>
+        <button data-tab="openings" class="nav-tab px-4 py-2 rounded-lg hover:bg-[#1f1f23] text-zinc-400 hover:text-zinc-200 font-medium cursor-pointer transition-colors flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+          Openings
+        </button>
+        <button data-tab="deepdive" class="nav-tab px-4 py-2 rounded-lg hover:bg-[#1f1f23] text-zinc-400 hover:text-zinc-200 font-medium cursor-pointer transition-colors flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+          Deep Dive
+        </button>
+        <button data-tab="menu" class="nav-tab px-4 py-2 rounded-lg hover:bg-[#1f1f23] text-zinc-400 hover:text-zinc-200 font-medium cursor-pointer transition-colors flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+          Menu
+        </button>
+      </nav>
+
+      <!-- Engine Status Indicator -->
+      <div class="hidden sm:flex items-center space-x-4">
+        <div class="flex items-center space-x-2 bg-black/40 px-3.5 py-1.5 rounded-full border border-[#2a2a2e]">
+          <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+          <span class="text-xs font-mono text-zinc-300 font-semibold">STOCKFISH v16.1</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-[1400px] w-full mx-auto p-4 md:p-6 flex flex-col overflow-x-hidden">
+
+      <!-- ==================== TAB 1: GAME (PLAY) ==================== -->
+      <section id="tab-play" class="tab-content active w-full flex flex-col gap-6">
+        
+        <!-- Main 3-Column Sleek Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- LEFT SIDEBAR: Coach & Match Stats (lg:col-span-3) -->
+          <aside class="lg:col-span-3 flex flex-col gap-4 w-full">
+            <!-- Coach Hikari Container -->
+            <div id="coach-container-play" class="w-full"></div>
+
+            <!-- Match Stats Card -->
+            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-4 flex flex-col gap-4 shadow-lg">
+              <div>
+                <h3 class="text-xs uppercase text-zinc-500 font-bold tracking-widest mb-3">Match Stats</h3>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-end">
+                    <span class="text-xs text-zinc-400">Win Prob.</span>
+                    <span id="win-prob-val" class="text-sm font-mono text-blue-400">50.0%</span>
+                  </div>
+                  <div class="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                    <div id="win-prob-bar" class="h-full bg-blue-500 transition-all duration-300" style="width: 50%"></div>
+                  </div>
+                  <div class="flex justify-between items-end pt-1">
+                    <span class="text-xs text-zinc-400">Best Move Acc.</span>
+                    <span id="best-acc-val" class="text-sm font-mono text-emerald-400">92%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Actions -->
+              <div class="grid grid-cols-2 gap-2 pt-2 border-t border-[#2a2a2e]">
+                <button id="btn-undo" class="py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold text-zinc-200 transition-colors cursor-pointer flex items-center justify-center gap-1">
+                  <span>↩️</span> UNDO
+                </button>
+                <button id="btn-resign" class="py-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 border border-red-900/50 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1">
+                  <span>🏳️</span> RESIGN
+                </button>
+              </div>
+            </div>
+
+            <!-- Multiplayer Arena Card -->
+            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-4 flex flex-col gap-3 shadow-lg">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs uppercase text-zinc-500 font-bold tracking-widest">Multiplayer Arena</h3>
+                <span id="multiplayer-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400">Play real-time synced chess against another player over WebSockets.</p>
+              
+              <div class="flex flex-col gap-2">
+                <div class="flex gap-2">
+                  <input type="text" id="multiplayer-room-input" placeholder="ROOM_CODE" value="" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500 w-full uppercase" />
+                  <button id="multiplayer-btn-join" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap">
+                    Join
+                  </button>
+                </div>
+                <button id="multiplayer-btn-create" class="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[10px] rounded-lg transition-colors cursor-pointer border border-zinc-700 uppercase tracking-widest mt-1">
+                  Create New Room
+                </button>
+                <div id="multiplayer-details-panel" class="hidden flex flex-col gap-1.5 bg-[#0d0d0f] p-2.5 rounded-lg border border-[#2a2a2e] text-xs mt-1">
+                  <div class="flex justify-between"><span class="text-zinc-500">Room:</span> <span id="multiplayer-detail-room" class="font-mono text-zinc-300">NONE</span></div>
+                  <div class="flex justify-between"><span class="text-zinc-500">Color:</span> <span id="multiplayer-detail-color" class="font-bold text-blue-400 uppercase">SPECTATOR</span></div>
+                  <div class="flex justify-between"><span class="text-zinc-500">Opponent:</span> <span id="multiplayer-detail-opponent" class="text-zinc-300">Waiting...</span></div>
+                  <button id="multiplayer-btn-leave" class="mt-2 w-full py-1 bg-red-900/20 hover:bg-red-900/30 text-red-400 border border-red-900/40 rounded-md text-[10px] font-bold transition-colors cursor-pointer">
+                    Leave Multiplayer Mode
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sensory Toy Link Card (Buttplug.io) -->
+            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-4 flex flex-col gap-3 shadow-lg">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs uppercase text-zinc-500 font-bold tracking-widest">Sensory Toy Link</h3>
+                <span id="toy-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400">Sync local Buttplug.io devices. Current player's toy vibrates during turn.</p>
+
+              <div class="text-[10px] text-zinc-400 bg-pink-900/10 border border-pink-900/30 p-2.5 rounded flex flex-col gap-1">
+                <p class="font-bold text-pink-400">How to connect toys:</p>
+                <ol class="list-decimal ml-4 space-y-1">
+                  <li>Download & open <a href="https://intiface.com/central/" target="_blank" class="text-pink-300 hover:underline font-semibold">Intiface Central</a></li>
+                  <li>Click <b>"Start Server"</b> in the Intiface app</li>
+                  <li>Click <b>"Connect"</b> below</li>
+                  <li>Turn on your Bluetooth toy & click <b>"Scan for Toys"</b></li>
+                </ol>
+              </div>
+              
+              <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Intiface Server URL</label>
+                  <div class="flex gap-2">
+                    <input type="text" id="toy-server-url" value="ws://127.0.0.1:12345" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-pink-500 w-full" />
+                    <button id="toy-btn-connect" class="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap">
+                      Connect
+                    </button>
+                  </div>
+                </div>
+
+                <div id="toy-control-panel" class="hidden flex flex-col gap-2 bg-[#0d0d0f] p-2.5 rounded-lg border border-[#2a2a2e] text-xs">
+                  <div class="flex justify-between items-center pb-1 border-b border-[#2a2a2e]">
+                    <span class="text-zinc-400 font-bold">Devices</span>
+                    <button id="toy-btn-scan" class="text-[10px] text-pink-400 hover:text-pink-300 font-bold">Scan for Toys</button>
+                  </div>
+                  <div id="toy-devices-list" class="text-[10px] text-zinc-500 italic py-1 text-center">No toys connected yet. Run a scan.</div>
+
+                  <!-- Adjustable Intensities -->
+                  <div class="space-y-2 pt-1 border-t border-[#2a2a2e]">
+                    <div>
+                      <div class="flex justify-between text-[10px] text-zinc-400 font-semibold mb-1">
+                        <span>Thinking Vibe Level</span>
+                        <span id="toy-val-thinking" class="text-pink-400">15%</span>
+                      </div>
+                      <input type="range" id="toy-slide-thinking" min="0" max="100" value="15" class="w-full accent-pink-500 cursor-pointer h-1 bg-zinc-800 rounded-lg appearance-none" />
+                    </div>
+
+                    <div>
+                      <div class="flex justify-between text-[10px] text-zinc-400 font-semibold mb-1">
+                        <span>Overtime Vibe Level</span>
+                        <span id="toy-val-overtime" class="text-pink-400">65%</span>
+                      </div>
+                      <input type="range" id="toy-slide-overtime" min="0" max="100" value="65" class="w-full accent-pink-500 cursor-pointer h-1 bg-zinc-800 rounded-lg appearance-none" />
+                    </div>
+
+                    <div>
+                      <div class="flex justify-between text-[10px] text-zinc-400 font-semibold mb-1">
+                        <span>Overtime Threshold</span>
+                        <span id="toy-val-threshold" class="text-pink-400">15s</span>
+                      </div>
+                      <input type="range" id="toy-slide-threshold" min="5" max="60" step="5" value="15" class="w-full accent-pink-500 cursor-pointer h-1 bg-zinc-800 rounded-lg appearance-none" />
+                    </div>
+                  </div>
+
+                  <div class="flex gap-2 pt-2 border-t border-[#2a2a2e]">
+                    <button id="toy-btn-test" class="w-full py-1 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded text-[10px] font-bold transition-all">
+                      Test 1s Pulse ⚡
+                    </button>
+                    <button id="toy-btn-stop" class="w-full py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-[10px] font-bold transition-all">
+                      Emergency Stop 🛑
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- CENTER COLUMN: Interactive Board & Controls (lg:col-span-6) -->
+          <section class="lg:col-span-6 flex flex-col gap-3 items-center justify-center w-full">
+            <!-- Header Status Bar with Clock Preset & Opening Display -->
+            <div class="w-full flex flex-wrap items-center justify-between gap-2 bg-[#16161a] px-4 py-2 rounded-xl border border-[#2a2a2e] shadow-sm">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="live-opening-label" class="text-xs font-semibold text-zinc-200">Standard Starting Position</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <select id="time-control-select" class="bg-[#252529] text-xs font-mono text-blue-300 border border-[#3a3a3e] rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer">
+                  <option value="blitz5" selected>Blitz 5|0</option>
+                  <option value="blitz3_2">Blitz 3|2</option>
+                  <option value="bullet1">Bullet 1|0</option>
+                  <option value="rapid10">Rapid 10|0</option>
+                  <option value="rapid15">Rapid 15|10</option>
+                  <option value="classical30">Classical 30|0</option>
+                  <option value="unlimited">Untimed</option>
+                </select>
+                <div id="turn-badge" class="text-xs font-mono font-bold px-3 py-1 rounded-full bg-[#252529] text-blue-400 border border-[#3a3a3e]">
+                  WHITE'S TURN
+                </div>
+              </div>
+            </div>
+
+            <!-- Top Opponent Clock Banner -->
+            <div id="top-clock-banner" class="w-full max-w-[540px] flex items-center justify-between px-4 py-1.5 bg-[#1c1c21] border border-[#2a2a2e] rounded-t-xl">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-zinc-300">Opponent (Black)</span>
+              </div>
+              <div id="clock-black-display" class="font-mono text-base font-extrabold px-3 py-0.5 rounded bg-black/60 text-zinc-200 border border-zinc-700">
+                05:00
+              </div>
+            </div>
+
+            <!-- Chessboard Container -->
+            <div id="game-board-container" class="w-full flex items-center justify-center"></div>
+
+            <!-- Bottom Player Clock Banner -->
+            <div id="bottom-clock-banner" class="w-full max-w-[540px] flex items-center justify-between px-4 py-1.5 bg-[#1c1c21] border border-[#2a2a2e] rounded-b-xl -mt-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-zinc-300">Player (White)</span>
+              </div>
+              <div id="clock-white-display" class="font-mono text-base font-extrabold px-3 py-0.5 rounded bg-black/60 text-emerald-400 border border-emerald-500/40">
+                05:00
+              </div>
+            </div>
+
+            <!-- Sleek Timeline Controls Toolbar -->
+            <div class="w-full max-w-[560px] flex items-center justify-between bg-[#16161a] border border-[#2a2a2e] rounded-xl px-4 py-2 shadow-lg">
+              <div class="flex space-x-1">
+                <button id="btn-first" title="First Move" class="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.41,16.59L13.82,12l4.59-4.59L17,6l-6,6l6,6L18.41,16.59z M6,6h2v12H6V6z"/></svg>
+                </button>
+                <button id="btn-back" title="Previous Move" class="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M15.41,16.59L10.83,12l4.58-4.59L14,6l-6,6l6,6L15.41,16.59z"/></svg>
+                </button>
+              </div>
+
+              <!-- Timeline Progress Bar -->
+              <div class="flex-1 mx-4 flex items-center">
+                <div class="h-1.5 w-full bg-zinc-800 rounded-full relative cursor-pointer" id="timeline-track">
+                  <div id="timeline-progress-bar" class="absolute h-1.5 bg-blue-500 rounded-full" style="width: 100%"></div>
+                  <div id="timeline-thumb" class="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-lg -ml-1.5" style="left: 100%"></div>
+                </div>
+              </div>
+
+              <div class="flex space-x-1 items-center">
+                <button id="btn-next" title="Next Move" class="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8.59,16.59L13.17,12L8.59,7.41L10,6l6,6l-6,6L8.59,16.59z"/></svg>
+                </button>
+                <button id="btn-current" title="Current Move" class="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5.59,7.41L10.18,12l-4.59,4.59L7,18l6-6L7,6L5.59,7.41z M16,6h2v12h-2V6z"/></svg>
+                </button>
+                <div class="h-4 w-px bg-[#2a2a2e] mx-1"></div>
+                <button id="btn-new-game" title="New Game" class="px-2.5 py-1 text-xs font-bold rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition-colors cursor-pointer">
+                  NEW
+                </button>
+                <button id="btn-expand" title="Fullscreen Board" class="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer">
+                  ⛶
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- RIGHT SIDEBAR: Eval, History & Captures (lg:col-span-3) -->
+          <aside class="lg:col-span-3 flex flex-col gap-4 w-full">
+            <!-- Engine Eval Bar Card -->
+            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-4 flex flex-col gap-2 shadow-lg">
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-zinc-500 font-bold uppercase tracking-widest">Engine Eval</span>
+                <span id="eval-score-text" class="text-sm font-mono text-zinc-200">+0.2</span>
+              </div>
+              <div class="h-6 w-full flex rounded-lg overflow-hidden border border-black/80">
+                <div id="eval-bar-white" class="bg-white flex items-center justify-center text-[10px] text-black font-bold transition-all duration-300" style="width: 50%">WHITE</div>
+                <div id="eval-bar-black" class="bg-zinc-900 flex items-center justify-center text-[10px] text-zinc-400 font-bold transition-all duration-300" style="width: 50%">BLACK</div>
+              </div>
+            </div>
+
+            <!-- Move History -->
+            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl flex flex-col overflow-hidden h-[340px] shadow-lg">
+              <div class="px-4 py-2.5 bg-[#1c1c21] border-b border-[#2a2a2e] flex justify-between items-center">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400">History</h3>
+                <span id="move-count-badge" class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded font-mono">0 Moves</span>
+              </div>
+              
+              <!-- Table Header -->
+              <div class="grid grid-cols-3 text-[11px] font-bold text-zinc-500 uppercase px-4 py-1.5 border-b border-[#2a2a2e]">
+                <span>#</span>
+                <span>White</span>
+                <span>Black</span>
+              </div>
+
+              <!-- Move List -->
+              <div id="move-history-table" class="flex-1 overflow-y-auto font-mono text-sm divide-y divide-[#2a2a2e] pr-1">
+                <div class="text-xs text-zinc-500 text-center py-6 italic">No moves played yet.</div>
+              </div>
+            </div>
+
+            <!-- Captured Pieces Panel -->
+            <div class="bg-[#16161a] border border-[#2a2a2e] rounded-xl p-3 shadow-lg">
+              <h3 class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Captured Pieces</h3>
+              <div class="flex flex-col gap-1.5">
+                <div id="captured-black" class="flex items-center space-x-1 text-lg min-h-[24px]">
+                  <span class="text-xs text-zinc-500">None</span>
+                </div>
+                <div id="captured-white" class="flex items-center space-x-1 text-lg text-white min-h-[24px]">
+                  <span class="text-xs text-zinc-500">None</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+        </div>
+      </section>
+
+      <!-- ==================== TAB: PUZZLES ==================== -->
+      <section id="tab-puzzles" class="tab-content flex-col gap-6 w-full max-w-5xl mx-auto">
+        <div class="bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] flex flex-wrap items-center justify-between gap-4 shadow-lg">
+          <div>
+            <h2 class="font-bold text-white text-base flex items-center gap-2">
+              <span>🧩</span> Tactical Puzzle Trainer
+            </h2>
+            <p class="text-xs text-zinc-400 mt-0.5">Solve curated tactical challenges with instant feedback, reset options, and GM Hikaru explanations!</p>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="bg-[#0d0d0f] px-3 py-1.5 rounded-lg border border-[#2a2a2e] text-xs flex items-center gap-2">
+              <span class="text-zinc-400">Streak:</span>
+              <span id="puzzle-streak-label" class="font-mono font-bold text-amber-400">🔥 0</span>
+            </div>
+            <div class="bg-[#0d0d0f] px-3 py-1.5 rounded-lg border border-[#2a2a2e] text-xs flex items-center gap-2">
+              <span class="text-zinc-400">Tactical Rating:</span>
+              <span id="puzzle-rating-label" class="font-mono font-bold text-emerald-400">1500</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div class="lg:col-span-7 flex flex-col gap-3 items-center">
+            <div id="puzzle-board-container" class="w-full"></div>
+            <div id="puzzle-feedback-banner" class="w-full p-3 rounded-xl bg-[#16161a] border border-[#2a2a2e] text-xs text-center font-bold text-zinc-300">
+              White to play. Find the best tactical continuation!
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 flex flex-col gap-4 bg-[#16161a] p-5 rounded-xl border border-[#2a2a2e] shadow-lg">
+            <div class="flex items-center justify-between border-b border-[#2a2a2e] pb-3">
+              <span id="puzzle-theme-badge" class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                Back Rank Mate
+              </span>
+              <span id="puzzle-difficulty-label" class="text-xs font-mono text-zinc-400">Rating: 1250</span>
+            </div>
+
+            <h3 id="puzzle-title-label" class="text-lg font-extrabold text-white">Smothered Mate Classic</h3>
+            <p id="puzzle-desc-label" class="text-xs text-zinc-300 leading-relaxed">
+              White to move and deliver an unstoppable back-rank checkmate.
+            </p>
+
+            <!-- Explanation Box -->
+            <div id="puzzle-explanation-box" class="hidden p-3 bg-blue-950/40 rounded-lg border border-blue-800/50 text-xs text-blue-200">
+              <span class="font-bold text-blue-400 block mb-1">Coach Naomi Breakdown:</span>
+              <p id="puzzle-explanation-text"></p>
+            </div>
+
+            <div class="p-3 bg-[#0d0d0f] rounded-lg border border-[#2a2a2e] flex flex-col gap-1">
+              <span class="text-[10px] uppercase font-bold text-zinc-500">Coach Hint</span>
+              <p id="puzzle-hint-text" class="text-xs text-zinc-400 italic">Tap "Coach Hint" when you need tactical guidance.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+              <button id="btn-puzzle-hint" class="py-2.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5">
+                Coach Hint
+              </button>
+              <button id="btn-puzzle-reset" class="py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5">
+                Reset Position
+              </button>
+              <button id="btn-puzzle-solution" class="py-2.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5">
+                Show Solution
+              </button>
+              <button id="btn-fetch-lichess-puzzle" class="py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5">
+                Lichess Daily
+              </button>
+            </div>
+            <button id="btn-puzzle-next" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-md flex items-center justify-center gap-1.5 mt-2">
+              Next Puzzle
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB: GAME REVIEW & EVALUATION GRAPH ==================== -->
+      <section id="tab-review" class="tab-content flex-col gap-6 w-full max-w-5xl mx-auto">
+        <div class="bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] flex flex-wrap items-center justify-between gap-4 shadow-lg">
+          <div>
+            <h2 class="font-bold text-white text-base flex items-center gap-2">
+              <span>📊</span> Game Review & Real-Time Evaluation Graph
+            </h2>
+            <p class="text-xs text-zinc-400 mt-0.5">Comprehensive move-by-move evaluation graph, move classification counts, and accuracy report.</p>
+          </div>
+          <button id="btn-generate-review" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-md flex items-center gap-1.5">
+            <span>✨</span> Refresh Full Game Report
+          </button>
+        </div>
+
+        <!-- Move Classification Badges Summary Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">‼️</span>
+            <span id="count-brilliant" class="text-base font-extrabold text-cyan-400 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Brilliant</span>
+          </div>
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">⭐️</span>
+            <span id="count-great" class="text-base font-extrabold text-teal-400 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Great</span>
+          </div>
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">🎯</span>
+            <span id="count-best" class="text-base font-extrabold text-emerald-400 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Best</span>
+          </div>
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">👍</span>
+            <span id="count-excellent" class="text-base font-extrabold text-green-400 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Excellent</span>
+          </div>
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">⚠️</span>
+            <span id="count-inaccuracy" class="text-base font-extrabold text-yellow-400 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Inaccuracy</span>
+          </div>
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">❓</span>
+            <span id="count-mistake" class="text-base font-extrabold text-orange-400 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Mistake</span>
+          </div>
+          <div class="bg-[#16161a] p-3 rounded-xl border border-[#2a2a2e] flex flex-col items-center justify-center">
+            <span class="text-lg">❌</span>
+            <span id="count-blunder" class="text-base font-extrabold text-red-500 mt-1">0</span>
+            <span class="text-[10px] text-zinc-500 uppercase font-bold">Blunder</span>
+          </div>
+        </div>
+
+        <!-- Evaluation Graph Canvas Container -->
+        <div class="bg-[#16161a] p-5 rounded-xl border border-[#2a2a2e] shadow-lg flex flex-col gap-3">
+          <div class="flex justify-between items-center">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Advantage Progression Line Graph</h3>
+            <span class="text-xs text-zinc-500">Centipawn Evaluation per Move</span>
+          </div>
+          <div class="w-full h-56 bg-[#0d0d0f] rounded-lg border border-[#2a2a2e] relative p-2 overflow-hidden flex items-center justify-center" id="eval-graph-container">
+            <svg id="eval-graph-svg" class="w-full h-full text-blue-500" viewBox="0 0 600 200" preserveAspectRatio="none">
+              <!-- Rendered dynamically -->
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB: OPENINGS BOOK EXPLORER ==================== -->
+      <section id="tab-openings" class="tab-content flex-col gap-6 w-full max-w-5xl mx-auto">
+        <div class="bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] flex flex-wrap items-center justify-between gap-4 shadow-lg">
+          <div>
+            <h2 class="font-bold text-white text-base flex items-center gap-2">
+              Opening Book Explorer & Lichess Masters Database
+            </h2>
+            <p class="text-xs text-zinc-400 mt-0.5">Explore deep Grandmaster opening lines with interactive board, real Lichess Masters statistics, and Coach Naomi strategic breakdown!</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <select id="opening-select-dropdown" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer">
+              <!-- Rendered dynamically -->
+            </select>
+            <span id="opening-eco-badge" class="px-2.5 py-1 rounded bg-blue-500/20 text-blue-300 font-mono font-bold text-xs border border-blue-500/30">ECO B90</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <!-- Left Column: Opening Board & Live Lichess Explorer -->
+          <div class="lg:col-span-5 flex flex-col gap-3 items-center">
+            <div id="opening-board-container" class="w-full"></div>
+            <button id="btn-fetch-lichess-masters" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs cursor-pointer transition-all shadow-md flex items-center justify-center gap-2">
+              Fetch Live Lichess Masters Data
+            </button>
+          </div>
+
+          <!-- Right Column: Opening Theory & Candidate Moves -->
+          <div class="lg:col-span-7 bg-[#16161a] p-5 rounded-xl border border-[#2a2a2e] shadow-lg flex flex-col gap-5">
+            <div class="border-b border-[#2a2a2e] pb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 id="opening-title-header" class="text-xl font-extrabold text-white">Sicilian Defense: Najdorf Variation</h3>
+                <p id="opening-desc-text" class="text-xs text-zinc-400 mt-1">The sharpest and most deeply analyzed opening in chess history.</p>
+              </div>
+              
+              <!-- Move Stepper Navigation -->
+              <div class="flex items-center gap-1.5 bg-[#0d0d0f] p-1.5 rounded-lg border border-[#2a2a2e]">
+                <button id="opening-btn-first" class="px-2.5 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">First</button>
+                <button id="opening-btn-prev" class="px-2.5 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">Prev</button>
+                <span id="opening-ply-counter" class="text-xs font-mono px-3 text-blue-400 font-bold">Move 0 / 10</span>
+                <button id="opening-btn-next" class="px-2.5 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">Next</button>
+                <button id="opening-btn-last" class="px-2.5 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">Last</button>
+              </div>
+            </div>
+
+            <!-- Move-by-Move Commentary Card -->
+            <div id="opening-commentary-card" class="p-4 bg-blue-950/30 rounded-xl border border-blue-800/40 flex flex-col gap-2">
+              <span class="text-xs uppercase font-extrabold text-blue-400 tracking-wider flex items-center gap-1.5">
+                Coach Naomi Move Analysis
+              </span>
+              <div id="opening-move-commentary" class="text-xs text-zinc-200 leading-relaxed space-y-2">
+                Select a move or step through the line to see Grandmaster strategic insights.
+              </div>
+            </div>
+
+            <!-- Key Ideas & Strategy -->
+            <div class="p-4 bg-[#0d0d0f] rounded-xl border border-[#2a2a2e] flex flex-col gap-2">
+              <span class="text-xs uppercase font-extrabold text-zinc-400 tracking-wider">Key Strategic Plans</span>
+              <ul id="opening-key-ideas" class="text-xs text-zinc-300 space-y-1.5 list-disc list-inside">
+                <!-- Rendered dynamically -->
+              </ul>
+            </div>
+
+            <!-- Continuations / Candidates -->
+            <div>
+              <h4 class="text-xs uppercase font-bold text-zinc-400 tracking-wider mb-3 flex items-center justify-between">
+                <span>Popular GM Candidate Moves (Lichess Master DB):</span>
+                <span id="opening-total-games-label" class="text-[10px] text-blue-400 font-mono">2,100,000+ Games</span>
+              </h4>
+              <div id="opening-candidates-container" class="flex flex-col gap-3">
+                <!-- Candidate Move Rows rendered dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="tab-deepdive" class="tab-content flex-col gap-6 w-full">
+        <!-- Header Banner -->
+        <div class="bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] flex flex-wrap items-center justify-between gap-4 shadow-lg">
+          <div>
+            <h2 class="font-bold text-white text-base flex items-center gap-2">
+              Deep Dive — Decision Tree Analysis
+            </h2>
+            <p class="text-xs text-zinc-400 mt-0.5">Replay positions, evaluate Stockfish candidate branches, and preview 10-ply continuation lines.</p>
+          </div>
+
+          <!-- Main Line Scrubber -->
+          <div class="flex items-center gap-2 bg-[#0d0d0f] p-1.5 rounded-lg border border-[#2a2a2e]">
+            <button id="dd-btn-first" class="px-2 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">First</button>
+            <button id="dd-btn-back" class="px-2 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">Prev</button>
+            <span id="dd-ply-counter" class="text-xs font-mono px-3 text-blue-400 font-semibold">Move 0 / 0</span>
+            <button id="dd-btn-next" class="px-2 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">Next</button>
+            <button id="dd-btn-current" class="px-2 py-1 rounded bg-[#1f1f23] hover:bg-[#252529] text-xs font-bold text-zinc-200 cursor-pointer">Last</button>
+          </div>
+        </div>
+
+        <!-- Step-by-Step Educational Pipeline -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] shadow-md">
+          <div class="flex gap-3 items-start">
+            <span class="flex-shrink-0 w-7 h-7 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold text-xs font-mono">1</span>
+            <div>
+              <h4 class="text-xs font-bold text-zinc-200">Choose Position Snapshot</h4>
+              <p class="text-[10px] text-zinc-400 leading-normal">Use the Scrubber above or the Game History tab to select any key turn in your game.</p>
+            </div>
+          </div>
+          <div class="flex gap-3 items-start border-t md:border-t-0 md:border-l border-[#2a2a2e] pt-3 md:pt-0 md:pl-4">
+            <span class="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-xs font-mono">2</span>
+            <div>
+              <h4 class="text-xs font-bold text-zinc-200">Select Candidate Branch</h4>
+              <p class="text-[10px] text-zinc-400 leading-normal">Review the Stockfish candidate list below. Click any alternative move to test it.</p>
+            </div>
+          </div>
+          <div class="flex gap-3 items-start border-t md:border-t-0 md:border-l border-[#2a2a2e] pt-3 md:pt-0 md:pl-4">
+            <span class="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center font-bold text-xs font-mono">3</span>
+            <div>
+              <h4 class="text-xs font-bold text-zinc-200">Simulate Predicted Sequences</h4>
+              <p class="text-[10px] text-zinc-400 leading-normal">Scrub through the 10-ply timeline on the right board to visually watch how variations unfold.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Split View Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          
+          <!-- LEFT PANEL: Main Line Board & Candidate Branch List -->
+          <div class="flex flex-col gap-4 bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] shadow-lg">
+            <div class="flex items-center justify-between border-b border-[#2a2a2e] pb-2">
+              <h3 class="font-bold text-zinc-200 text-sm flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                1. Main Line Game Position
+              </h3>
+              <span class="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono font-bold">Naomi Analyst Engine</span>
+            </div>
+
+            <!-- Main Line Board -->
+            <div id="main-line-board-container" class="w-full"></div>
+
+            <!-- Candidate Branch List -->
+            <div class="mt-2 flex flex-col gap-2">
+              <h4 class="font-bold text-zinc-400 text-xs uppercase tracking-wider flex items-center justify-between">
+                <span>Stockfish Candidate Options</span>
+                <span class="text-[10px] text-zinc-500 normal-case">(Tap to preview)</span>
+              </h4>
+              <div id="dd-branch-list" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+                <div class="text-zinc-500 text-sm p-4 text-center">Select a move position to analyze candidates.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT PANEL: Branch Board & 10-Ply Continuation Line -->
+          <div class="flex flex-col gap-4 bg-[#16161a] p-4 rounded-xl border border-[#2a2a2e] shadow-lg">
+            <div class="flex items-center justify-between border-b border-[#2a2a2e] pb-2">
+              <h3 class="font-bold text-zinc-200 text-sm flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+                2. Predicted Continuation
+              </h3>
+              <div class="flex items-center gap-1.5 bg-[#0d0d0f] p-1 rounded-lg border border-[#2a2a2e]">
+                <button id="branch-btn-prev" class="px-2 py-0.5 bg-[#1f1f23] hover:bg-[#252529] text-xs rounded text-zinc-300 font-semibold cursor-pointer">Prev</button>
+                <span id="branch-ply-label" class="text-xs font-mono text-cyan-400 font-semibold px-2">Ply 1 / 10</span>
+                <button id="branch-btn-next" class="px-2 py-0.5 bg-[#1f1f23] hover:bg-[#252529] text-xs rounded text-zinc-300 font-semibold cursor-pointer">Next</button>
+              </div>
+            </div>
+
+            <!-- Branch Line Board -->
+            <div id="branch-board-container" class="w-full"></div>
+
+            <!-- Continuation Move Timeline -->
+            <div class="p-3 bg-[#0d0d0f] rounded-lg border border-[#2a2a2e] flex flex-col gap-2">
+              <span class="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Variation Move Timeline (Tap to Jump)</span>
+              <div id="dd-continuation-timeline" class="flex flex-wrap gap-1.5 py-0.5">
+                <!-- Badges rendered dynamically -->
+              </div>
+            </div>
+
+            <!-- Tactical Evaluation Note -->
+            <div class="p-3 bg-[#1c1c21] rounded-lg border border-[#2a2a2e] text-xs text-zinc-400 leading-relaxed">
+              <span class="font-bold text-cyan-400">Deep Dive Insight:</span> Stockfish is predicting the most likely continuation line starting from the selected candidate move. Click any pill in the timeline above to quickly jump through this predicted future!
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: MENU (SETTINGS & SAVED GAMES) ==================== -->
+      <section id="tab-menu" class="tab-content flex-col gap-6 w-full max-w-4xl mx-auto">
+        
+        <!-- Game Settings Card -->
+        <div class="bg-[#16161a] p-6 rounded-xl border border-[#2a2a2e] shadow-lg flex flex-col gap-6">
+          <div class="border-b border-[#2a2a2e] pb-3 flex items-center justify-between">
+            <h2 class="font-bold text-white text-base flex items-center gap-2">
+              Game Settings
+            </h2>
+            <button id="btn-save-game" class="px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-bold text-xs border border-blue-500/40 shadow cursor-pointer transition-all flex items-center gap-2">
+              Save Current Game
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Play as -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-color" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">Play As Color</label>
+              <select id="setting-color" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                <option value="white">White (First Move)</option>
+                <option value="black">Black (Second Move)</option>
+                <option value="random">Random Color</option>
+              </select>
+            </div>
+
+            <!-- Game Difficulty -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-difficulty" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">Game Difficulty Mode</label>
+              <select id="setting-difficulty" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="Beginner">Beginner (Skill Level 3)</option>
+                <option value="Club" selected>Club Player (Skill Level 10)</option>
+                <option value="Master">Master (Skill Level 20)</option>
+                <option value="ELO">Custom Rating (Matched ELO)</option>
+              </select>
+            </div>
+
+            <!-- Chess.com ELO Input -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-chess-elo" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">Chess.com ELO Rating</label>
+              <div class="flex items-center gap-2">
+                <input type="number" id="setting-chess-elo" min="400" max="3200" step="50" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 w-full" value="1500" />
+                <span id="engine-elo-match-badge" class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-2 rounded-lg font-mono whitespace-nowrap font-semibold">Engine: 1550 ELO</span>
+              </div>
+            </div>
+
+            <!-- Coach Identity -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-coach-identity" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">AI Coach Identity</label>
+              <select id="setting-coach-identity" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="hikari" selected>Coach Naomi (AI Grandmaster)</option>
+              </select>
+            </div>
+
+            <!-- Piece Set Style -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-piece-style" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">Lichess Piece Set Style</label>
+              <select id="setting-piece-style" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="cburnett" selected>Lichess Cburnett (Default Official Vector)</option>
+                <option value="merida">Lichess Merida</option>
+                <option value="alpha">Lichess Alpha Classic</option>
+                <option value="staunty">Lichess Staunty</option>
+                <option value="california">Lichess California</option>
+                <option value="maestro">Lichess Maestro</option>
+                <option value="dubrovny">Lichess Dubrovnik</option>
+                <option value="cardinal">Lichess Cardinal</option>
+                <option value="unicode">Clean Unicode Text</option>
+              </select>
+            </div>
+
+            <!-- Board Theme -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-board-theme" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">Lichess Board Theme</label>
+              <select id="setting-board-theme" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="wood" selected>Lichess Maple Wood</option>
+                <option value="emerald">Lichess Tournament Green</option>
+                <option value="blue">Lichess Midnight Blue</option>
+                <option value="ic">Lichess IC Grey-Blue</option>
+                <option value="purple">Lichess Purple</option>
+                <option value="slate">Lichess Slate</option>
+                <option value="pink">Pink & White</option>
+                <option value="coral">Coral & Sand</option>
+              </select>
+            </div>
+
+            <!-- UI Theme -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-ui-theme" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">UI Accent Theme</label>
+              <select id="setting-ui-theme" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-pink-500 cursor-pointer">
+                <option value="pink">Pastel Rose & Pink</option>
+                <option value="blue" selected>Electric Blue</option>
+                <option value="cyan">Neon Cyan</option>
+                <option value="emerald">Emerald Green</option>
+                <option value="violet">Royal Violet</option>
+                <option value="gold">Cyber Gold</option>
+                <option value="crimson">Crimson Red</option>
+              </select>
+            </div>
+
+            <!-- Site Background Theme -->
+            <div class="flex flex-col gap-2">
+              <label for="setting-bg-theme" class="text-xs uppercase font-bold text-zinc-400 tracking-wider">Site Background Theme</label>
+              <select id="setting-bg-theme" class="bg-[#0d0d0f] text-zinc-200 border border-[#2a2a2e] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="auto">Auto-Match (Board Theme Compliment)</option>
+                <option value="#0d0d0f" selected>Cozy Deep Charcoal</option>
+                <option value="#000000">Pure Pitch Black</option>
+                <option value="#121316">Classic Dark Slate</option>
+                <option value="#05070c">Midnight Navy Abyss</option>
+                <option value="#060907">Deep Forest Moss</option>
+                <option value="#0f0a08">Warm Espresso Mahogany</option>
+                <option value="#0a080d">Dark Royal Violet</option>
+                <option value="#f8f9fa">Sophisticated Soft Alabaster (Light)</option>
+                <option value="#f5f2eb">Cozy Cream Linen (Light)</option>
+                <option value="#ebefe9">Gentle Sage Mint (Light)</option>
+                <option value="#e8eff5">Classic Cool Slate (Light)</option>
+                <option value="#faf6f0">Warm Pearl Silk (Light)</option>
+              </select>
+            </div>
+
+            <!-- Best Move Arrows -->
+            <div class="flex items-center justify-between p-3 rounded-lg bg-[#0d0d0f] border border-[#2a2a2e] col-span-1 md:col-span-2">
+              <div>
+                <span class="text-sm font-semibold text-zinc-200 block">Best Move Arrows</span>
+                <span class="text-xs text-zinc-400">Display colored candidate move arrows on your turn</span>
+              </div>
+              <input type="checkbox" id="setting-arrows" checked class="w-5 h-5 accent-blue-500 cursor-pointer" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Saved Games Panel -->
+        <div class="bg-[#16161a] p-6 rounded-xl border border-[#2a2a2e] shadow-lg flex flex-col gap-4">
+          <div class="border-b border-[#2a2a2e] pb-3 flex items-center justify-between">
+            <h2 class="font-bold text-white text-base flex items-center gap-2">
+              Saved Games (LocalStorage)
+            </h2>
+            <span class="text-xs text-zinc-400">Quick Panel</span>
+          </div>
+
+          <div id="saved-games-list" class="flex flex-col gap-3">
+            <div class="text-zinc-500 text-sm p-4 text-center">No saved games yet.</div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- GAME OVER MODAL OVERLAY -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 hidden transition-opacity duration-300">
+      <div class="bg-[#16161a] border border-[#2a2a2e] rounded-2xl p-6 max-w-sm w-full flex flex-col items-center text-center shadow-2xl mx-4">
+        <div id="game-over-icon" class="text-4xl mb-3">🏆</div>
+        <h2 id="game-over-title" class="text-lg font-bold text-zinc-100 tracking-wide mb-1">Checkmate!</h2>
+        <p id="game-over-text" class="text-xs text-zinc-400 mb-6">White has won the game!</p>
+        <button id="game-over-btn-close" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">
+          GREAT GAME!
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-[#2a2a2e] bg-[#16161a] py-3 px-4 text-center text-xs text-zinc-500">
+      Vanguard Chess Academy • Sleek Interface Theme • Powered by Stockfish & chess.js
+    </footer>
+
+    <!-- Buttplug.io Client Library -->
+    <script src="https://cdn.jsdelivr.net/npm/buttplug@3.0.0/dist/web/buttplug.min.js"></script>
+    <!-- App Main Script -->
+    <script type="module" src="/src/script.js"></script>
+  </body>
+</html>
+

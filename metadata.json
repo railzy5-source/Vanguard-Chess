@@ -1,0 +1,6 @@
+{
+  "name": "Vanguard Chess Academy",
+  "description": "Interactive premium chess coaching academy with Stockfish AI, move timeline, best-move arrows, deep dive decision tree analysis, and Coach Naomi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
