@@ -167,7 +167,12 @@ class VanguardChessApp {
     this.updateMatchMetrics();
     this.updateCapturedPieces();
     this.updateOpeningDisplay();
-    this.renderEvalGraph();
+    
+    // Safely render the eval graph after DOM is ready
+    requestAnimationFrame(() => {
+      this.renderEvalGraph();
+    });
+    
     this.initOpeningExplorerUI();
 
     if (this.playerColor === 'black') {
@@ -574,16 +579,16 @@ class VanguardChessApp {
       const key = input?.value?.trim();
       
       if (key && key.length > 10) {
-        this.llmCoach.setApiKey('gemini', key);
+        this.llmCoach.setApiKey('deepseek', key);
         if (status) {
-          status.textContent = '✅ Status: Gemini API configured and ready!';
+          status.textContent = '✅ Status: DeepSeek API configured and ready!';
           status.className = 'text-[10px] text-emerald-400';
         }
         input.value = '';
-        this.coach.speak('Gemini API key saved! I can now provide much deeper chess insights! 🎉', 'happy');
+        this.coach.speak('DeepSeek API key saved! I can now provide much deeper chess insights! 🎉', 'happy');
       } else {
         if (status) {
-          status.textContent = '⚠️ Please enter a valid Gemini API key (starts with "AIza")';
+          status.textContent = '⚠️ Please enter a valid API key';
           status.className = 'text-[10px] text-amber-400';
         }
       }
@@ -602,10 +607,10 @@ class VanguardChessApp {
     const statusEl = document.getElementById('api-key-status');
     if (statusEl) {
       if (this.llmCoach.isReady()) {
-        statusEl.textContent = '✅ Status: Gemini API configured and ready!';
+        statusEl.textContent = '✅ Status: DeepSeek API configured and ready!';
         statusEl.className = 'text-[10px] text-emerald-400';
       } else {
-        statusEl.textContent = 'ℹ️ Status: Not configured (using heuristic coach)';
+        statusEl.textContent = 'ℹ️ Status: Using DeepSeek free tier (heuristic fallback)';
         statusEl.className = 'text-[10px] text-zinc-400';
       }
     }
@@ -1101,14 +1106,24 @@ class VanguardChessApp {
   }
 
   async scrubDeepDiveToPly(plyIndex) {
-    if (plyIndex < 0 || plyIndex > this.moveHistory.length) return;
+    // Ensure plyIndex is a valid number
+    if (isNaN(plyIndex) || !isFinite(plyIndex)) {
+      plyIndex = 0;
+    }
+    
+    if (plyIndex < 0 || plyIndex > this.moveHistory.length) {
+      plyIndex = Math.max(0, Math.min(plyIndex, this.moveHistory.length));
+      return;
+    }
 
     this.deepDivePly = plyIndex;
 
     this.deepDiveGame = new Chess();
     for (let i = 0; i < plyIndex; i++) {
       const item = this.moveHistory[i];
-      this.deepDiveGame.move({ from: item.from, to: item.to, promotion: 'q' });
+      if (item && item.from && item.to) {
+        this.deepDiveGame.move({ from: item.from, to: item.to, promotion: 'q' });
+      }
     }
 
     this.mainLineBoard.setChessGame(this.deepDiveGame);
@@ -1116,7 +1131,11 @@ class VanguardChessApp {
 
     if (plyIndex > 0) {
       const last = this.moveHistory[plyIndex - 1];
-      this.mainLineBoard.setLastMove(last.from, last.to);
+      if (last && last.from && last.to) {
+        this.mainLineBoard.setLastMove(last.from, last.to);
+      } else {
+        this.mainLineBoard.setLastMove(null, null);
+      }
     } else {
       this.mainLineBoard.setLastMove(null, null);
     }
@@ -1125,7 +1144,12 @@ class VanguardChessApp {
     if (counter) counter.textContent = `Move ${plyIndex} / ${this.moveHistory.length}`;
 
     this.loadBranchCandidates();
-    this.renderEvalGraph();
+    
+    // Safely render the eval graph
+    requestAnimationFrame(() => {
+      this.renderEvalGraph();
+    });
+    
     this.updateDeepDiveCoachReview(plyIndex);
   }
 
@@ -2086,20 +2110,49 @@ class VanguardChessApp {
     }
   }
 
+  /**
+   * Render Centipawn Evaluation SVG Line Graph & Classification Badges Summary
+   * FIXED: Handles empty/NaN data safely
+   */
   renderEvalGraph() {
     const svg = document.getElementById('eval-graph-svg');
-    if (!svg) return;
+    if (!svg) {
+      console.warn('⚠️ eval-graph-svg element not found');
+      return;
+    }
 
+    // Reset move counts
     this.moveClassCounts = { brilliant: 0, great: 0, best: 0, excellent: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
 
+    // If no moves in history, show empty state
+    if (!this.moveHistory || this.moveHistory.length === 0) {
+      const width = 600;
+      const height = 40;
+      const midY = height / 2;
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.innerHTML = `
+        <rect x="0" y="0" width="${width}" height="${height}" fill="#18181b" opacity="0.95"/>
+        <text x="${width/2}" y="${midY + 5}" fill="#64748b" font-size="10" text-anchor="middle" font-family="monospace">No moves played yet</text>
+      `;
+      
+      // Reset count badges
+      ['count-brilliant', 'count-great', 'count-best', 'count-excellent', 'count-inaccuracy', 'count-mistake', 'count-blunder'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '0';
+      });
+      return;
+    }
+
+    // Build evaluation array from move history
     const evals = [0];
     let lastCp = 0;
 
     this.moveHistory.forEach((m, idx) => {
       let cp = lastCp;
-      if (m.scoreFromWhite !== undefined && m.scoreFromWhite !== null) {
+      if (m.scoreFromWhite !== undefined && m.scoreFromWhite !== null && !isNaN(m.scoreFromWhite)) {
         cp = m.scoreFromWhite;
       } else {
+        // Fallback: use a simple pattern based on move quality
         const wave = (Math.sin(idx * 0.8) * 50) + ((idx % 3 === 0) ? 40 : -20);
         cp = lastCp + Math.round(wave);
         cp = Math.max(-1000, Math.min(1000, cp));
@@ -2107,6 +2160,7 @@ class VanguardChessApp {
       lastCp = cp;
       evals.push(cp);
 
+      // Count move classifications
       if (m.classification) {
         const cls = m.classification.toLowerCase();
         if (cls === 'brilliant') this.moveClassCounts.brilliant++;
@@ -2121,6 +2175,7 @@ class VanguardChessApp {
       }
     });
 
+    // Update count labels
     const setEl = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
@@ -2134,62 +2189,85 @@ class VanguardChessApp {
     setEl('count-mistake', this.moveClassCounts.mistake);
     setEl('count-blunder', this.moveClassCounts.blunder);
 
+    // SVG Graph dimensions
     const width = 600;
     const height = 40;
     const midY = height / 2;
     const maxCp = 1500;
 
+    // If we have less than 2 data points, show a simple line
     if (evals.length < 2) {
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       svg.innerHTML = `
-        <path d="M 0,${midY} L ${width},${midY}" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"/>
-        <text x="${width/2}" y="${midY - 5}" fill="#64748b" font-size="10" text-anchor="middle">No moves played yet</text>
+        <rect x="0" y="0" width="${width}" height="${height}" fill="#18181b" opacity="0.95"/>
+        <line x1="0" y1="${midY}" x2="${width}" y2="${midY}" stroke="#2563eb" stroke-width="2" opacity="0.5"/>
+        <text x="${width/2}" y="${midY - 5}" fill="#64748b" font-size="10" text-anchor="middle">Analyzing position...</text>
       `;
       return;
     }
 
+    // Build points array with safe calculations
     const points = evals.map((cp, idx) => {
       const x = (idx / Math.max(1, evals.length - 1)) * width;
       const clamped = Math.max(-maxCp, Math.min(maxCp, cp || 0));
       const norm = clamped / maxCp;
       const compressed = Math.sign(norm) * Math.pow(Math.abs(norm), 0.75);
       const y = midY + compressed * (midY - 3);
+      // Ensure x and y are valid numbers
       return { 
-        x: isNaN(x) ? 0 : parseFloat(x.toFixed(1)), 
-        y: isNaN(y) ? midY : parseFloat(y.toFixed(1)), 
+        x: isNaN(x) || !isFinite(x) ? 0 : parseFloat(x.toFixed(1)), 
+        y: isNaN(y) || !isFinite(y) ? midY : parseFloat(y.toFixed(1)), 
         cp: cp || 0, 
         ply: idx 
       };
     });
 
-    const pathD = `M ${points[0].x},${points[0].y} ` + points.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
+    // Get first and last points safely
+    const firstPoint = points[0] || { x: 0, y: midY };
+    const lastPoint = points[points.length - 1] || { x: width, y: midY };
+    
+    // Build points string for paths
     const pointsStr = points.map(p => `${p.x},${p.y}`).join(' L ');
+    const pathD = `M ${firstPoint.x},${firstPoint.y} L ${pointsStr}`;
 
-    const blackAreaD = `M 0,0 L 0,${points[0].y} L ${pointsStr} L ${width},${points[points.length - 1].y} L ${width},0 Z`;
-    const whiteAreaD = `M 0,${height} L 0,${points[0].y} L ${pointsStr} L ${width},${points[points.length - 1].y} L ${width},${height} Z`;
+    // Build area paths with safety checks
+    const blackAreaD = `M 0,0 L 0,${firstPoint.y} L ${pointsStr} L ${width},${lastPoint.y} L ${width},0 Z`;
+    const whiteAreaD = `M 0,${height} L 0,${firstPoint.y} L ${pointsStr} L ${width},${lastPoint.y} L ${width},${height} Z`;
 
+    // Generate circle markers safely
+    let circlesHtml = '';
+    points.forEach(p => {
+      // Skip if coordinates are invalid
+      if (isNaN(p.x) || isNaN(p.y) || !isFinite(p.x) || !isFinite(p.y)) return;
+      
+      const isActive = p.ply === this.deepDivePly;
+      const color = p.cp >= 0 ? '#10b981' : '#f43f5e';
+      
+      if (isActive) {
+        circlesHtml += `
+          <circle cx="${p.x}" cy="${p.y}" r="6" fill="#38bdf8" fill-opacity="0.3" class="animate-ping"/>
+          <circle cx="${p.x}" cy="${p.y}" r="4" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" class="cursor-pointer eval-point" data-ply="${p.ply}"/>
+        `;
+      } else {
+        circlesHtml += `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="${color}" stroke="#0d0d0f" stroke-width="1" class="cursor-pointer hover:r-4 transition-all eval-point" data-ply="${p.ply}"/>`;
+      }
+    });
+
+    // Set SVG content
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.innerHTML = `
       <path d="${blackAreaD}" fill="#18181b" opacity="0.95"/>
       <path d="${whiteAreaD}" fill="#f4f4f5" opacity="0.95"/>
       <path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      ${points.map(p => {
-        const isActive = p.ply === this.deepDivePly;
-        if (isActive) {
-          return `
-            <circle cx="${p.x}" cy="${p.y}" r="6" fill="#38bdf8" fill-opacity="0.3" class="animate-ping"/>
-            <circle cx="${p.x}" cy="${p.y}" r="4" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" class="cursor-pointer eval-point" data-ply="${p.ply}"/>
-          `;
-        }
-        return `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="${p.cp >= 0 ? '#10b981' : '#f43f5e'}" stroke="#0d0d0f" stroke-width="1" class="cursor-pointer hover:r-4 transition-all eval-point" data-ply="${p.ply}"/>`;
-      }).join('')}
+      ${circlesHtml}
     `;
 
+    // Click handler for points to scrub Deep Dive position
     svg.onclick = (evt) => {
       const pointEl = evt.target.closest('.eval-point');
       if (pointEl && pointEl.dataset.ply !== undefined) {
         const targetPly = parseInt(pointEl.dataset.ply, 10);
-        if (!isNaN(targetPly)) {
+        if (!isNaN(targetPly) && targetPly >= 0 && targetPly <= this.moveHistory.length) {
           this.scrubDeepDiveToPly(targetPly);
         }
       }
