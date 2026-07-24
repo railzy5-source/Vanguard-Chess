@@ -1,3 +1,6 @@
+@import "chessground/assets/chessground.base.css";
+@import "chessground/assets/chessground.brown.css";
+@import "chessground/assets/chessground.cburnett.css";
 @import "tailwindcss";
 
 @layer base {
@@ -121,6 +124,168 @@
   border-color: #2a2a2e;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
 }
+
+.chessground-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 540px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.chessground-wrapper .cg-wrap {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Chessground Board Themes */
+.chessground-wrapper cg-board {
+  transition: background-color 0.2s ease, background-image 0.2s ease;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Wood / Brown (Default Lichess Maple) */
+.chessground-wrapper[data-board-theme="wood"] cg-board,
+.chessground-wrapper:not([data-board-theme]) cg-board {
+  background-color: #f0d9b5 !important;
+  background-image: conic-gradient(#f0d9b5 90deg, #b58863 0 180deg, #f0d9b5 0 270deg, #b58863 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Emerald (Lichess Tournament Green) */
+.chessground-wrapper[data-board-theme="emerald"] cg-board {
+  background-color: #eeeed2 !important;
+  background-image: conic-gradient(#eeeed2 90deg, #769656 0 180deg, #eeeed2 0 270deg, #769656 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Blue (Lichess Midnight Blue) */
+.chessground-wrapper[data-board-theme="blue"] cg-board {
+  background-color: #dee3e6 !important;
+  background-image: conic-gradient(#dee3e6 90deg, #8ca2ad 0 180deg, #dee3e6 0 270deg, #8ca2ad 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* IC (Lichess IC Grey-Blue) */
+.chessground-wrapper[data-board-theme="ic"] cg-board {
+  background-color: #eceeed !important;
+  background-image: conic-gradient(#eceeed 90deg, #6c7993 0 180deg, #eceeed 0 270deg, #6c7993 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Purple (Lichess Royal Purple) */
+.chessground-wrapper[data-board-theme="purple"] cg-board {
+  background-color: #e3d6e6 !important;
+  background-image: conic-gradient(#e3d6e6 90deg, #7d5295 0 180deg, #e3d6e6 0 270deg, #7d5295 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Slate (Lichess Slate Dark) */
+.chessground-wrapper[data-board-theme="slate"] cg-board {
+  background-color: #cbd5e1 !important;
+  background-image: conic-gradient(#cbd5e1 90deg, #475569 0 180deg, #cbd5e1 0 270deg, #475569 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Pink (Pastel Rose) */
+.chessground-wrapper[data-board-theme="pink"] cg-board {
+  background-color: #fce7f3 !important;
+  background-image: conic-gradient(#fce7f3 90deg, #e11d48 0 180deg, #fce7f3 0 270deg, #e11d48 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Coral (Warm Amber) */
+.chessground-wrapper[data-board-theme="coral"] cg-board {
+  background-color: #fef3c7 !important;
+  background-image: conic-gradient(#fef3c7 90deg, #d97706 0 180deg, #fef3c7 0 270deg, #d97706 0) !important;
+  background-size: 25% 25% !important;
+}
+
+/* Official Lichess Piece Sets CSS for Chessground */
+/* Merida */
+.chessground-wrapper[data-piece-style="merida"] piece.pawn.white { background-image: url('https://lichess1.org/assets/piece/merida/wP.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.knight.white { background-image: url('https://lichess1.org/assets/piece/merida/wN.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.bishop.white { background-image: url('https://lichess1.org/assets/piece/merida/wB.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.rook.white { background-image: url('https://lichess1.org/assets/piece/merida/wR.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.queen.white { background-image: url('https://lichess1.org/assets/piece/merida/wQ.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.king.white { background-image: url('https://lichess1.org/assets/piece/merida/wK.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.pawn.black { background-image: url('https://lichess1.org/assets/piece/merida/bP.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.knight.black { background-image: url('https://lichess1.org/assets/piece/merida/bN.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.bishop.black { background-image: url('https://lichess1.org/assets/piece/merida/bB.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.rook.black { background-image: url('https://lichess1.org/assets/piece/merida/bR.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.queen.black { background-image: url('https://lichess1.org/assets/piece/merida/bQ.svg') !important; }
+.chessground-wrapper[data-piece-style="merida"] piece.king.black { background-image: url('https://lichess1.org/assets/piece/merida/bK.svg') !important; }
+
+/* Alpha */
+.chessground-wrapper[data-piece-style="alpha"] piece.pawn.white { background-image: url('https://lichess1.org/assets/piece/alpha/wP.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.knight.white { background-image: url('https://lichess1.org/assets/piece/alpha/wN.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.bishop.white { background-image: url('https://lichess1.org/assets/piece/alpha/wB.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.rook.white { background-image: url('https://lichess1.org/assets/piece/alpha/wR.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.queen.white { background-image: url('https://lichess1.org/assets/piece/alpha/wQ.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.king.white { background-image: url('https://lichess1.org/assets/piece/alpha/wK.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.pawn.black { background-image: url('https://lichess1.org/assets/piece/alpha/bP.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.knight.black { background-image: url('https://lichess1.org/assets/piece/alpha/bN.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.bishop.black { background-image: url('https://lichess1.org/assets/piece/alpha/bB.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.rook.black { background-image: url('https://lichess1.org/assets/piece/alpha/bR.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.queen.black { background-image: url('https://lichess1.org/assets/piece/alpha/bQ.svg') !important; }
+.chessground-wrapper[data-piece-style="alpha"] piece.king.black { background-image: url('https://lichess1.org/assets/piece/alpha/bK.svg') !important; }
+
+/* Staunty */
+.chessground-wrapper[data-piece-style="staunty"] piece.pawn.white { background-image: url('https://lichess1.org/assets/piece/staunty/wP.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.knight.white { background-image: url('https://lichess1.org/assets/piece/staunty/wN.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.bishop.white { background-image: url('https://lichess1.org/assets/piece/staunty/wB.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.rook.white { background-image: url('https://lichess1.org/assets/piece/staunty/wR.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.queen.white { background-image: url('https://lichess1.org/assets/piece/staunty/wQ.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.king.white { background-image: url('https://lichess1.org/assets/piece/staunty/wK.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.pawn.black { background-image: url('https://lichess1.org/assets/piece/staunty/bP.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.knight.black { background-image: url('https://lichess1.org/assets/piece/staunty/bN.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.bishop.black { background-image: url('https://lichess1.org/assets/piece/staunty/bB.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.rook.black { background-image: url('https://lichess1.org/assets/piece/staunty/bR.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.queen.black { background-image: url('https://lichess1.org/assets/piece/staunty/bQ.svg') !important; }
+.chessground-wrapper[data-piece-style="staunty"] piece.king.black { background-image: url('https://lichess1.org/assets/piece/staunty/bK.svg') !important; }
+
+/* California */
+.chessground-wrapper[data-piece-style="california"] piece.pawn.white { background-image: url('https://lichess1.org/assets/piece/california/wP.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.knight.white { background-image: url('https://lichess1.org/assets/piece/california/wN.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.bishop.white { background-image: url('https://lichess1.org/assets/piece/california/wB.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.rook.white { background-image: url('https://lichess1.org/assets/piece/california/wR.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.queen.white { background-image: url('https://lichess1.org/assets/piece/california/wQ.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.king.white { background-image: url('https://lichess1.org/assets/piece/california/wK.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.pawn.black { background-image: url('https://lichess1.org/assets/piece/california/bP.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.knight.black { background-image: url('https://lichess1.org/assets/piece/california/bN.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.bishop.black { background-image: url('https://lichess1.org/assets/piece/california/bB.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.rook.black { background-image: url('https://lichess1.org/assets/piece/california/bR.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.queen.black { background-image: url('https://lichess1.org/assets/piece/california/bQ.svg') !important; }
+.chessground-wrapper[data-piece-style="california"] piece.king.black { background-image: url('https://lichess1.org/assets/piece/california/bK.svg') !important; }
+
+/* Dubrovnik */
+.chessground-wrapper[data-piece-style="dubrovny"] piece.pawn.white { background-image: url('https://lichess1.org/assets/piece/dubrovny/wP.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.knight.white { background-image: url('https://lichess1.org/assets/piece/dubrovny/wN.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.bishop.white { background-image: url('https://lichess1.org/assets/piece/dubrovny/wB.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.rook.white { background-image: url('https://lichess1.org/assets/piece/dubrovny/wR.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.queen.white { background-image: url('https://lichess1.org/assets/piece/dubrovny/wQ.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.king.white { background-image: url('https://lichess1.org/assets/piece/dubrovny/wK.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.pawn.black { background-image: url('https://lichess1.org/assets/piece/dubrovny/bP.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.knight.black { background-image: url('https://lichess1.org/assets/piece/dubrovny/bN.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.bishop.black { background-image: url('https://lichess1.org/assets/piece/dubrovny/bB.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.rook.black { background-image: url('https://lichess1.org/assets/piece/dubrovny/bR.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.queen.black { background-image: url('https://lichess1.org/assets/piece/dubrovny/bQ.svg') !important; }
+.chessground-wrapper[data-piece-style="dubrovny"] piece.king.black { background-image: url('https://lichess1.org/assets/piece/dubrovny/bK.svg') !important; }
+
+/* Spatial 3D */
+.chessground-wrapper[data-piece-style="spatial"] piece.pawn.white { background-image: url('https://lichess1.org/assets/piece/spatial/wP.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.knight.white { background-image: url('https://lichess1.org/assets/piece/spatial/wN.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.bishop.white { background-image: url('https://lichess1.org/assets/piece/spatial/wB.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.rook.white { background-image: url('https://lichess1.org/assets/piece/spatial/wR.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.queen.white { background-image: url('https://lichess1.org/assets/piece/spatial/wQ.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.king.white { background-image: url('https://lichess1.org/assets/piece/spatial/wK.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.pawn.black { background-image: url('https://lichess1.org/assets/piece/spatial/bP.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.knight.black { background-image: url('https://lichess1.org/assets/piece/spatial/bN.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.bishop.black { background-image: url('https://lichess1.org/assets/piece/spatial/bB.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.rook.black { background-image: url('https://lichess1.org/assets/piece/spatial/bR.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.queen.black { background-image: url('https://lichess1.org/assets/piece/spatial/bQ.svg') !important; }
+.chessground-wrapper[data-piece-style="spatial"] piece.king.black { background-image: url('https://lichess1.org/assets/piece/spatial/bK.svg') !important; }
 
 .square {
   user-select: none;

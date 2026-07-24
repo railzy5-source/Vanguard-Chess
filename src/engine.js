@@ -25,22 +25,15 @@ export class ChessEngine {
    */
   initStockfish() {
     try {
-      // Stockfish JS Web Worker CDN URL
-      const stockfishCdn = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
-      
-      // Attempt worker creation via Blob to avoid CORS issues
-      const workerCode = `importScripts('${stockfishCdn}');`;
-      const blob = new Blob([workerCode], { type: 'application/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
-
-      this.worker = new Worker(blobUrl);
+      // Local self-hosted Stockfish Web Worker
+      this.worker = new Worker('/stockfish.js');
 
       this.worker.onmessage = (e) => {
         this.handleEngineMessage(e.data);
       };
 
       this.worker.onerror = (err) => {
-        console.warn('Stockfish CDN Worker error, using fallback engine:', err);
+        console.warn('Stockfish local Worker error, using fallback engine:', err);
         this.worker = null;
       };
 

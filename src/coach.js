@@ -4,6 +4,8 @@
  */
 
 import hikariAvatar from './assets/images/hikari_coach_avatar_1784810444071.jpg';
+import { FactsEngine } from './factsEngine.js';
+import { MoveClassifier } from './classifier.js';
 
 export const COACH_IDENTITIES = {
   hikari: {
@@ -205,7 +207,7 @@ export class CoachNaomi {
         if (this.lastRationale) {
           cardsHtml += `
             <div id="coach-rationale-card" class="p-2 bg-blue-950/40 rounded border border-blue-800/50 text-xs">
-              <span class="font-bold text-blue-400">Why this is better:</span> ${this.lastRationale}
+              <span class="font-bold text-blue-400">Strategic Rationale & Aim:</span> ${this.lastRationale}
             </div>`;
         }
         if (breakdown.enemyPlan) {
@@ -399,6 +401,28 @@ export class CoachNaomi {
   }
 
   /**
+   * Evaluates position facts (hanging pieces, checks, threats)
+   * grounded in actual game state using FactsEngine.
+   */
+  computePositionFacts(game) {
+    if (!game) return null;
+    const facts = FactsEngine.analyze(game);
+    if (!facts) return null;
+
+    const hangingCurrent = facts.hangingPieces.filter(h => h.isOwnerTurn);
+    const hangingOpponent = facts.hangingPieces.filter(h => !h.isOwnerTurn);
+
+    return {
+      inCheck: facts.inCheck,
+      isCheckmate: facts.isCheckmate,
+      hangingCurrent,
+      hangingOpponent,
+      forks: facts.forks,
+      materialDelta: facts.materialDelta
+    };
+  }
+
+  /**
    * React to player or opponent move events with detailed GM analysis
    */
   reactToMove(moveResult) {
@@ -418,6 +442,11 @@ export class CoachNaomi {
       }
     }
 
+    let facts = null;
+    if (moveResult.game) {
+      facts = this.computePositionFacts(moveResult.game);
+    }
+
     if (moveResult.isPlayer) {
       const classification = moveResult.classification || 'Good';
       const bestMoveSan = moveResult.bestMoveSan || '';
@@ -427,6 +456,19 @@ export class CoachNaomi {
       let rationale = ``;
       let enemyPlan = moveResult.enemyPlan || `Opponent will look to challenge your piece structure and find active tactical counterplay.`;
       let warning = moveResult.warning || `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
+
+      if (facts) {
+        if (facts.hangingOpponent.length > 0) {
+          const h = facts.hangingOpponent[0];
+          warning = `Tactical Fact: The opponent's ${h.name} on ${h.square} is currently undefended and under attack!`;
+        } else if (facts.hangingCurrent.length > 0) {
+          const h = facts.hangingCurrent[0];
+          warning = `Tactical Fact: Be careful—your ${h.name} on ${h.square} is under threat!`;
+        }
+        if (facts.inCheck) {
+          enemyPlan = `Check delivered! The opponent's King is forced to respond immediately.`;
+        }
+      }
 
       if (classification === 'Brilliant') {
         text = `Brilliant finding ${san}! That's a master-level tactical stroke!`;
@@ -475,9 +517,6 @@ export class CoachNaomi {
 
       this.speak(text, this.getEmotionByClass(classification), { rationale, enemyPlan, warning }, true);
     } else {
-      // Opponent moves: tell enemy's possible intentions, attacks, and forks, AND correctly
-      // reflect the opponent's actual move quality instead of always showing "Danger/Mistake".
-      // Speak: FALSE (no audio interrupt).
       const classification = moveResult.classification || '';
       const san = moveResult.san || '';
       const text = `Opponent played ${san}.`;
@@ -497,24 +536,34 @@ export class CoachNaomi {
         enemyPlan = `The enemy King is directing a check! Look for potential fork, pin, or discovery attacks accompanying this check.`;
       }
 
-      // BUG FIX: pick badge/emotion from the opponent's real classification instead of
-      // hardcoding 'smug' ("Danger / Mistake") for every single opponent move.
       let warning = '';
-      if (classification === 'Blunder') {
-        warning = `Opponent just blundered with ${san}! Look for a way to capitalize immediately.`;
-      } else if (classification === 'Mistake') {
-        warning = `That's a loose move from the opponent - look for ways to press your advantage.`;
-      } else if (classification === 'Inaccuracy') {
-        warning = `A slightly imprecise move from the opponent - stay alert for small opportunities.`;
-      } else if (classification === 'Brilliant' || classification === 'Best Move' || classification === 'Excellent') {
-        warning = `That was a strong, precise move from the opponent - stay sharp and don't give anything back.`;
-      } else {
-        warning = `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
+      if (facts) {
+        if (facts.hangingCurrent.length > 0) {
+          const h = facts.hangingCurrent[0];
+          warning = `Warning: Opponent's move puts your ${h.name} on ${h.square} under direct threat!`;
+        } else if (facts.hangingOpponent.length > 0) {
+          const h = facts.hangingOpponent[0];
+          warning = `Tactical Opportunity: The opponent left their ${h.name} on ${h.square} undefended!`;
+        }
       }
 
-      // BUG FIX: pass '' (not null) for rationale so the stale "Why this is better" card
-      // from your last move is actually cleared instead of persisting on screen.
-      this.speak(text, this.getOpponentEmotionByClass(classification), { rationale: '', enemyPlan, warning }, false);
+      if (!warning) {
+        if (classification === 'Blunder') {
+          warning = `Opponent just blundered with ${san}! Look for a way to capitalize immediately.`;
+        } else if (classification === 'Mistake') {
+          warning = `That's a loose move from the opponent - look for ways to press your advantage.`;
+        } else if (classification === 'Inaccuracy') {
+          warning = `A slightly imprecise move from the opponent - stay alert for small opportunities.`;
+        } else if (classification === 'Brilliant' || classification === 'Best Move' || classification === 'Excellent') {
+          warning = `That was a strong, precise move from the opponent - stay sharp and don't give anything back.`;
+        } else {
+          warning = `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
+        }
+      }
+
+      let rationale = null;
+
+      this.speak(text, this.getOpponentEmotionByClass(classification), { rationale, enemyPlan, warning }, false);
     }
   }
 

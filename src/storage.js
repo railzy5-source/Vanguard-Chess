@@ -90,7 +90,7 @@ export const Storage = {
       boardTheme: 'wood', // 'wood' | 'pink' | 'emerald' | 'blue' | 'slate' | 'coral' | 'cyber' | 'lavender'
       bgTheme: 'auto', // 'auto' | '#0d0d0f' | '#000000' | etc.
       uiTheme: 'blue', // 'blue' | 'pink' | 'emerald' | 'violet' | 'gold' | 'crimson' | 'cyan'
-      pieceStyle: 'chesscom' // 'chesscom' | 'pinkGold' | 'glassCrystal' | 'cyberGlow'
+      pieceStyle: 'cburnett' // 'cburnett'
     };
     try {
       const data = localStorage.getItem(STORAGE_KEY_SETTINGS);

@@ -5,29 +5,53 @@
 
 import { Chess } from 'chess.js';
 import { ChessEngine } from './engine.js';
-import { ChessBoardUI, getPieceSvg } from './board.js';
+import { ChessBoardUI } from './board.js';
 import { CoachNaomi } from './coach.js';
 import { Storage } from './storage.js';
 import { ChessClock } from './clock.js';
 import { PuzzleTrainer } from './puzzles.js';
 import { OPENINGS_DATABASE, OpeningExplorer } from './openingBook.js';
+import { MoveClassifier } from './classifier.js';
+import { FactsEngine } from './factsEngine.js';
+
+function getPieceSvg(pieceKey, style = 'cburnett') {
+  const symbols = {
+    'wP': '♙', 'wN': '♘', 'wB': '♗', 'wR': '♖', 'wQ': '♕', 'wK': '♔',
+    'bP': '♟', 'bN': '♞', 'bB': '♝', 'bR': '♜', 'bQ': '♛', 'bK': '♚'
+  };
+  const isWhite = pieceKey.startsWith('w');
+  const symbol = symbols[pieceKey] || '♟';
+  const colorStyle = isWhite
+    ? 'color: #f8fafc; text-shadow: 0 1px 2px rgba(0,0,0,0.9);'
+    : 'color: #0f172a; text-shadow: 0 1px 2px rgba(255,255,255,0.6);';
+  return `<span style="${colorStyle}" class="text-base font-bold leading-none select-none inline-flex items-center justify-center w-full h-full">${symbol}</span>`;
+}
 
 class VanguardChessApp {
   constructor() {
+    window.app = this;
     this.game = new Chess();
     this.engine = new ChessEngine();
     this.coach = new CoachNaomi();
     this.settings = Storage.getSettings();
 
-    // Game state
-    this.moveHistory = []; // [{ fen, san, uci, from, to, color, cpEval, classification }]
-    this.currentPlyIndex = 0;
-    this.playerColor = 'white';
-    this.gameActive = true;
-    this.isAiThinking = false;
-    this.isFullscreen = false;
-    this.playerAccuracyScores = [];
-    this.moveClassCounts = { brilliant: 0, great: 0, best: 0, excellent: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    // Centralized Game State
+    this.state = {
+      moveHistory: [],
+      currentPlyIndex: 0,
+      playerColor: 'white',
+      gameActive: true,
+      isAiThinking: false,
+      isFullscreen: false,
+      playerAccuracyScores: [],
+      moveClassCounts: { brilliant: 0, great: 0, best: 0, excellent: 0, inaccuracy: 0, mistake: 0, blunder: 0 },
+      openingIndex: 0,
+      openingPly: 0,
+      deepDivePly: 0,
+      selectedBranchMove: null,
+      continuationLine: [],
+      branchPlyIndex: 0
+    };
 
     // Clock
     this.clock = new ChessClock('blitz5', 
@@ -40,16 +64,8 @@ class VanguardChessApp {
     this.puzzleTrainer = new PuzzleTrainer((puzzle) => this.loadPuzzleUI(puzzle));
     this.puzzleBoard = null;
 
-    // Opening Explorer state
-    this.openingIndex = 0;
-    this.openingPly = 0;
-
-    // Deep Dive state
+    // Deep Dive & Opening Games
     this.deepDiveGame = new Chess();
-    this.deepDivePly = 0;
-    this.selectedBranchMove = null;
-    this.continuationLine = [];
-    this.branchPlyIndex = 0;
 
     // Boards
     this.gameBoard = null;
@@ -58,6 +74,48 @@ class VanguardChessApp {
 
     this.init();
   }
+
+  get moveHistory() { return this.state.moveHistory; }
+  set moveHistory(v) { this.state.moveHistory = v; }
+
+  get currentPlyIndex() { return this.state.currentPlyIndex; }
+  set currentPlyIndex(v) { this.state.currentPlyIndex = v; }
+
+  get playerColor() { return this.state.playerColor; }
+  set playerColor(v) { this.state.playerColor = v; }
+
+  get gameActive() { return this.state.gameActive; }
+  set gameActive(v) { this.state.gameActive = v; }
+
+  get isAiThinking() { return this.state.isAiThinking; }
+  set isAiThinking(v) { this.state.isAiThinking = v; }
+
+  get isFullscreen() { return this.state.isFullscreen; }
+  set isFullscreen(v) { this.state.isFullscreen = v; }
+
+  get playerAccuracyScores() { return this.state.playerAccuracyScores; }
+  set playerAccuracyScores(v) { this.state.playerAccuracyScores = v; }
+
+  get moveClassCounts() { return this.state.moveClassCounts; }
+  set moveClassCounts(v) { this.state.moveClassCounts = v; }
+
+  get openingIndex() { return this.state.openingIndex; }
+  set openingIndex(v) { this.state.openingIndex = v; }
+
+  get openingPly() { return this.state.openingPly; }
+  set openingPly(v) { this.state.openingPly = v; }
+
+  get deepDivePly() { return this.state.deepDivePly; }
+  set deepDivePly(v) { this.state.deepDivePly = v; }
+
+  get selectedBranchMove() { return this.state.selectedBranchMove; }
+  set selectedBranchMove(v) { this.state.selectedBranchMove = v; }
+
+  get continuationLine() { return this.state.continuationLine; }
+  set continuationLine(v) { this.state.continuationLine = v; }
+
+  get branchPlyIndex() { return this.state.branchPlyIndex; }
+  set branchPlyIndex(v) { this.state.branchPlyIndex = v; }
 
   init() {
     this.resolvePlayerColor();
@@ -249,7 +307,7 @@ class VanguardChessApp {
     if (selectBgTheme) selectBgTheme.value = this.settings.bgTheme || 'auto';
     if (selectUiTheme) selectUiTheme.value = this.settings.uiTheme || 'blue';
     if (selectCoach) selectCoach.value = this.settings.coachIdentity || 'vivienne';
-    if (selectPieceStyle) selectPieceStyle.value = this.settings.pieceStyle || 'chesscom';
+    if (selectPieceStyle) selectPieceStyle.value = this.settings.pieceStyle || 'cburnett';
     if (checkArrows) checkArrows.checked = this.settings.showArrows !== false;
 
     if (inputChessElo) {
@@ -306,6 +364,28 @@ class VanguardChessApp {
     document.getElementById('branch-btn-prev')?.addEventListener('click', () => this.scrubBranchPly(this.branchPlyIndex - 1));
     document.getElementById('branch-btn-next')?.addEventListener('click', () => this.scrubBranchPly(this.branchPlyIndex + 1));
 
+    // Keyboard Arrow navigation for Deep Dive
+    document.addEventListener('keydown', (e) => {
+      // Don't trigger if user is typing in an input/textarea
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+
+      if (this.currentTab === 'deepdive') {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          this.scrubDeepDiveToPly(this.deepDivePly - 1);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          this.scrubDeepDiveToPly(this.deepDivePly + 1);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.scrubBranchPly(this.branchPlyIndex - 1);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.scrubBranchPly(this.branchPlyIndex + 1);
+        }
+      }
+    });
+
     // Time Control selector
     document.getElementById('time-control-select')?.addEventListener('change', (e) => {
       this.clock.setTimeControl(e.target.value);
@@ -352,55 +432,127 @@ class VanguardChessApp {
       }
     });
 
-    // Opening Explorer Stepper Controls
+    // Opening Explorer Sub-Tab Switching
+    document.querySelectorAll('.opening-subtab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetTab = e.currentTarget.dataset.subtab;
+        
+        // Update button states
+        document.querySelectorAll('.opening-subtab-btn').forEach(b => {
+          if (b.dataset.subtab === targetTab) {
+            b.className = 'opening-subtab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-blue-600 text-white shadow';
+          } else {
+            b.className = 'opening-subtab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-[#0d0d0f] text-zinc-400 hover:text-white border border-[#2a2a2e]';
+          }
+        });
+
+        // Show target panel
+        document.querySelectorAll('.opening-subtab-panel').forEach(panel => {
+          if (panel.id === `opening-subtab-panel-${targetTab}`) {
+            panel.classList.remove('hidden');
+            panel.classList.add('flex');
+          } else {
+            panel.classList.add('hidden');
+            panel.classList.remove('flex');
+          }
+        });
+      });
+    });
+
+    // Opening Side Filter Change
+    document.getElementById('opening-side-filter')?.addEventListener('change', () => {
+      this.renderOpeningDropdown();
+      this.renderOpeningExplorer();
+    });
+
+    // Opening Stepper Chips Click Delegate
+    document.getElementById('opening-stepper-chips')?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.opening-chip');
+      if (chip && chip.dataset.ply !== undefined) {
+        const ply = parseInt(chip.dataset.ply, 10);
+        this.openingPly = ply;
+        this.renderOpeningExplorer();
+      }
+    });
+
+    // Opening Explorer Stepper Controls & Flip
     document.getElementById('opening-select-dropdown')?.addEventListener('change', (e) => {
       const selectedId = e.target.value;
-      if (selectedId === 'free_explore') {
-        this.openingIndex = -1;
-        this.freeExploreGame = new Chess();
+      const index = OPENINGS_DATABASE.findIndex(o => o.id === selectedId);
+      if (index !== -1) {
+        this.openingIndex = index;
+        this.openingPly = 0;
+        this.userFlippedOpeningBoard = false;
         this.renderOpeningExplorer();
-      } else {
-        const index = OPENINGS_DATABASE.findIndex(o => o.id === selectedId);
-        if (index !== -1) {
-          this.openingIndex = index;
-          this.openingPly = 0;
-          this.renderOpeningExplorer();
-        }
+      }
+    });
+
+    document.getElementById('opening-btn-flip')?.addEventListener('click', () => {
+      if (this.openingBoard) {
+        this.userFlippedOpeningBoard = true;
+        const current = this.openingBoard.orientation || 'white';
+        const newOrient = current === 'white' ? 'black' : 'white';
+        this.openingBoard.setOrientation(newOrient);
       }
     });
 
     document.getElementById('opening-btn-first')?.addEventListener('click', () => {
-      if (this.openingIndex === -1 && this.freeExploreGame) {
-         this.freeExploreGame.reset();
-         this.renderOpeningExplorer();
-         return;
-      }
       this.openingPly = 0;
       this.renderOpeningExplorer();
     });
 
     document.getElementById('opening-btn-prev')?.addEventListener('click', () => {
-      if (this.openingIndex === -1 && this.freeExploreGame) {
-         this.freeExploreGame.undo();
-         this.renderOpeningExplorer();
-         return;
-      }
       this.openingPly = Math.max(0, this.openingPly - 1);
       this.renderOpeningExplorer();
     });
 
     document.getElementById('opening-btn-next')?.addEventListener('click', () => {
-      if (this.openingIndex === -1) return; // Not supported in free explore
       const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
       this.openingPly = Math.min(op.moves.length, this.openingPly + 1);
       this.renderOpeningExplorer();
     });
 
     document.getElementById('opening-btn-last')?.addEventListener('click', () => {
-      if (this.openingIndex === -1) return; // Not supported in free explore
       const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
       this.openingPly = op.moves.length;
       this.renderOpeningExplorer();
+    });
+
+    // Mark as Mastered Toggle
+    document.getElementById('opening-btn-mastered')?.addEventListener('click', () => {
+      const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
+      let mastered = JSON.parse(localStorage.getItem('hikari_mastered_openings') || '[]');
+      if (mastered.includes(op.id)) {
+        mastered = mastered.filter(id => id !== op.id);
+        this.coach.speak(`Removed ${op.name} from your mastered list.`, 'normal');
+      } else {
+        mastered.push(op.id);
+        this.coach.speak(`🎉 Awesome! ${op.name} added to your Mastered Repertoire!`, 'happy');
+      }
+      localStorage.setItem('hikari_mastered_openings', JSON.stringify(mastered));
+      this.renderOpeningExplorer();
+      this.renderOpeningDropdown();
+    });
+
+    // Practice Position Against Bot
+    document.getElementById('opening-btn-practice-bot')?.addEventListener('click', () => {
+      const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
+      if (this.openingGame) {
+        const fen = this.openingGame.fen();
+        this.game = new Chess(fen);
+        this.board.setChessGame(this.game);
+        this.board.setOrientation(op.side === 'black' ? 'black' : 'white');
+        this.moveHistory = [];
+        this.moveTimestamps = [];
+        this.isGameActive = true;
+        this.gameResult = null;
+        
+        // Switch to Game Tab
+        const gameTabBtn = document.querySelector('.nav-tab-btn[data-tab="game"]');
+        if (gameTabBtn) gameTabBtn.click();
+
+        this.coach.speak(`⚔️ Practice position loaded for ${op.name}! Make your move against Coach Naomi!`, 'flirty');
+      }
     });
 
     // Game Review Refresh Button
@@ -470,23 +622,8 @@ class VanguardChessApp {
       this.coach.speak(`AI Grandmaster difficulty changed to ${this.settings.difficulty}! Let's see if you can keep up!`, 'flirty');
     });
 
-    document.getElementById('btn-fetch-lichess-masters')?.addEventListener('click', () => {
-      this.fetchLiveLichessMasters(this.openingIndex === -1 ? this.freeExploreGame : this.openingGame);
-    });
-
     // Save Game Button
     document.getElementById('btn-save-game')?.addEventListener('click', () => this.handleSaveGame());
-
-    document.getElementById('opening-candidates-container')?.addEventListener('click', (e) => {
-      const moveEl = e.target.closest('.lichess-candidate-move');
-      if (moveEl && this.openingIndex === -1 && this.freeExploreGame) {
-        const san = moveEl.dataset.san;
-        const moveRes = this.freeExploreGame.move(san);
-        if (moveRes) {
-          this.renderOpeningExplorer();
-        }
-      }
-    });
   }
 
   /**
@@ -510,7 +647,9 @@ class VanguardChessApp {
       activeContent.classList.add('active');
     }
 
-    if (tabId === 'deepdive') {
+    if (tabId === 'deepdive' || tabId === 'review') {
+      const activeContent = document.getElementById('tab-deepdive');
+      if (activeContent) activeContent.classList.add('active');
       this.initDeepDive();
       this.coach.reactToDeepDive();
     } else if (tabId === 'puzzles') {
@@ -548,49 +687,7 @@ class VanguardChessApp {
     let playedScore = 0;
     let scoreFromWhite = 0;
 
-    try {
-      const candidates = await this.engine.analyzePosition(fenBefore, 3);
-      if (candidates && candidates.length > 0) {
-        const bestUci = candidates[0].moveUci;
-        bestMoveSan = candidates[0].san;
-        const topScore = candidates[0].score;
-
-        const playedCand = candidates.find(c => c.moveUci === uci);
-        playedScore = playedCand ? playedCand.score : (topScore - 150);
-        scoreFromWhite = move.color === 'w' ? playedScore : -playedScore;
-        const diff = Math.max(0, topScore - playedScore);
-
-        // Determine classification
-        if (uci === bestUci) {
-          const roll = Math.random();
-          if (roll < 0.05) {
-            classification = 'Brilliant';
-          } else if (roll < 0.25) {
-            classification = 'Great';
-          } else {
-            classification = 'Best Move';
-          }
-        } else if (diff < 20) {
-          classification = 'Excellent';
-        } else if (diff < 60) {
-          classification = 'Good';
-        } else if (diff < 120) {
-          classification = 'Inaccuracy';
-        } else if (diff < 220) {
-          classification = 'Mistake';
-        } else {
-          classification = 'Blunder';
-        }
-
-        // Accuracy tracking
-        const moveAcc = Math.max(15, Math.round(100 * Math.exp(-0.003 * diff)));
-        this.playerAccuracyScores.push(moveAcc);
-      }
-    } catch (err) {
-      console.error('Error classifying player move:', err);
-    }
-
-    // Override if book move
+    // Check if book move first
     let isBookMove = false;
     let matchedOpeningName = '';
     const sanHistory = this.moveHistory.map(m => m.san).concat([move.san]);
@@ -609,6 +706,38 @@ class VanguardChessApp {
           break;
         }
       }
+    }
+
+    try {
+      const candidates = await this.engine.analyzePosition(fenBefore, 3);
+      if (candidates && candidates.length > 0) {
+        const bestUci = candidates[0].moveUci;
+        bestMoveSan = candidates[0].san;
+        const topScore = candidates[0].score;
+
+        const playedCand = candidates.find(c => c.moveUci === uci);
+        playedScore = playedCand ? playedCand.score : (topScore - 150);
+        scoreFromWhite = move.color === 'w' ? playedScore : -playedScore;
+        const diff = Math.max(0, topScore - playedScore);
+
+        // Objective Centipawn Loss Classification
+        const result = MoveClassifier.classifyMove({
+          playedUci: uci,
+          bestUci: bestUci,
+          evalBefore: topScore,
+          evalAfter: playedScore,
+          isSacrifice: move.captured !== undefined && move.piece !== 'p' && move.captured !== 'p',
+          isBook: isBookMove
+        });
+
+        classification = result.classification;
+
+        // Accuracy tracking
+        const moveAcc = Math.max(15, Math.round(100 * Math.exp(-0.003 * diff)));
+        this.playerAccuracyScores.push(moveAcc);
+      }
+    } catch (err) {
+      console.error('Error classifying player move:', err);
     }
 
     if (isBookMove) {
@@ -652,7 +781,8 @@ class VanguardChessApp {
       isPlayer: true,
       classification: classification,
       bestMoveSan: bestMoveSan,
-      openingName: classification === 'Book' ? matchedOpeningName : undefined
+      openingName: classification === 'Book' ? matchedOpeningName : undefined,
+      game: this.game
     });
 
     // AI Turn
@@ -705,44 +835,27 @@ class VanguardChessApp {
           // ✅ USE MULTIPV DATA FROM getBestMove, don't re-analyze!
           let aiClassification = 'Good';
           let aiScore = 0;
+          let bestAiMoveSan = '';
           
           if (result.multiPV && result.multiPV.length > 0) {
             const bestAiMove = result.multiPV[0];
+            bestAiMoveSan = bestAiMove.san;
             const playedAiMove = result.multiPV.find(m => m.moveUci === bestMoveUci);
             
             aiScore = playedAiMove ? playedAiMove.score : (bestAiMove.score - 150);
             const topScore = bestAiMove.score;
-            const aiDiff = Math.max(0, topScore - aiScore);
-            
-            // Scale thresholds by AI ELO
-            const aiElo = this.engine.currentElo || 1500;
-            let scale = 1.0;
-            if (aiElo <= 600) {
-              scale = 4.0;  // Increased to 4.0 for ultra-weak play
-            } else if (aiElo <= 1000) {
-              scale = 3.0;
-            } else if (aiElo <= 1400) {
-              scale = 2.0;
-            } else if (aiElo <= 1800) {
-              scale = 1.5;
-            }
-            
-            // Classify with scaled thresholds
-            if (bestMoveUci === bestAiMove.moveUci) {
-              aiClassification = 'Best Move';
-            } else if (aiDiff < 20 * scale) {
-              aiClassification = 'Excellent';
-            } else if (aiDiff < 60 * scale) {
-              aiClassification = 'Good';
-            } else if (aiDiff < 120 * scale) {
-              aiClassification = 'Inaccuracy';
-            } else if (aiDiff < 220 * scale) {
-              aiClassification = 'Mistake';
-            } else {
-              aiClassification = 'Blunder';
-            }
-            
-            console.log(`🤖 AI Move: ${moveRes.san} | Diff: ${aiDiff}cp | Scale: ${scale}x | Class: ${aiClassification}`);
+
+            // Objective Centipawn Loss Classification (No ELO Scaling)
+            const classRes = MoveClassifier.classifyMove({
+              playedUci: bestMoveUci,
+              bestUci: bestAiMove.moveUci,
+              evalBefore: topScore,
+              evalAfter: aiScore,
+              isSacrifice: moveRes.captured !== undefined && moveRes.piece !== 'p' && moveRes.captured !== 'p'
+            });
+
+            aiClassification = classRes.classification;
+            console.log(`🤖 AI Move: ${moveRes.san} | Score: ${aiScore} | Class: ${aiClassification}`);
           }
           
           const scoreFromWhite = moveRes.color === 'w' ? aiScore : -aiScore;
@@ -756,7 +869,8 @@ class VanguardChessApp {
             color: moveRes.color,
             score: aiScore,
             scoreFromWhite: scoreFromWhite,
-            classification: aiClassification  // ✅ From actual analysis
+            classification: aiClassification,
+            bestMoveSan: bestAiMoveSan
           });
 
           this.currentPlyIndex = this.moveHistory.length;
@@ -775,7 +889,9 @@ class VanguardChessApp {
             isCheck: this.game.inCheck(),
             isCheckmate: this.game.isCheckmate(),
             isCapture: moveRes.captured !== undefined,
-            isPlayer: false
+            isPlayer: false,
+            classification: aiClassification,
+            game: this.game
           });
 
           if (this.checkGameOver()) {
@@ -804,13 +920,23 @@ class VanguardChessApp {
 
     const currentFen = this.game.fen();
     const candidateMoves = await this.engine.analyzePosition(currentFen, 3);
+    if (!candidateMoves.length) return;
 
-    const arrows = candidateMoves.map(cand => {
+    const bestScore = candidateMoves[0]?.score ?? 0;
+    const arrows = candidateMoves.map((cand) => {
       if (!cand.moveUci) return null;
+      const diff = Math.max(0, bestScore - (cand.score ?? 0));
+      let brush = 'green';
+      let rank = 1;
+      if (diff > 80) { brush = 'red'; rank = 4; }
+      else if (diff > 35) { brush = 'yellow'; rank = 3; }
+      else if (diff > 5) { brush = 'blue'; rank = 2; }
+
       return {
         from: cand.moveUci.substring(0, 2),
         to: cand.moveUci.substring(2, 4),
-        rank: cand.rank || 1
+        rank: rank,
+        brush: brush
       };
     }).filter(Boolean);
 
@@ -1062,6 +1188,130 @@ class VanguardChessApp {
 
     // Calculate Branch candidate moves for Main Line position
     this.loadBranchCandidates();
+
+    // Re-render Advantage Graph to update active move indicator
+    this.renderEvalGraph();
+
+    // Update Coach Naomi Detailed Move Breakdown & Game Review
+    this.updateDeepDiveCoachReview(plyIndex);
+  }
+
+  /**
+   * Update Coach Naomi Detailed Move Breakdown & Game Review panel in Deep Dive
+   */
+  updateDeepDiveCoachReview(plyIndex) {
+    const container = document.getElementById('dd-coach-breakdown-content');
+    const counterEl = document.getElementById('dd-coach-review-counter');
+    if (!container) return;
+
+    if (counterEl) {
+      counterEl.textContent = `Showing Move ${plyIndex} of ${this.moveHistory.length}`;
+    }
+
+    if (this.moveHistory.length === 0) {
+      container.innerHTML = `<div class="text-zinc-500 text-xs p-6 text-center">No game moves recorded yet. Play a game or load saved games to review!</div>`;
+      return;
+    }
+
+    if (plyIndex === 0) {
+      container.innerHTML = `
+        <div class="bg-[#0d0d0f] p-4 rounded-xl border border-[#2a2a2e] flex flex-col gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-base">👑</span>
+            <h4 class="font-bold text-white text-xs uppercase tracking-wider">Coach Naomi's Opening Guidance</h4>
+          </div>
+          <p class="text-xs text-zinc-300 leading-relaxed">
+            "Welcome to the starting position! Before any moves are played, remember our core principles: control the central squares (e4, d4, e5, d5), develop your Knights before your Bishops, and prepare to castle early to keep your King secure."
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    const moveItem = this.moveHistory[plyIndex - 1];
+    const classification = moveItem.classification || 'Good';
+    const badge = this.getClassificationBadge(classification);
+    const san = moveItem.san;
+    const bestSan = moveItem.bestMoveSan;
+    const isWhite = moveItem.color === 'w';
+    const moveNum = Math.ceil(plyIndex / 2);
+
+    let whatYouShouldHaveDone = '';
+    if (classification === 'Blunder' || classification === 'Mistake' || classification === 'Inaccuracy') {
+      if (bestSan && bestSan !== san) {
+        whatYouShouldHaveDone = `Instead of playing <strong>${san}</strong>, you should have played <strong>${bestSan}</strong>. Playing <strong>${bestSan}</strong> avoids the evaluation loss and maintains much stronger control.`;
+      } else {
+        whatYouShouldHaveDone = `Playing <strong>${san}</strong> resulted in an evaluation drop (${classification.toLowerCase()}). You should have chosen a safer developing move or defended vulnerable squares.`;
+      }
+    } else if (bestSan && bestSan !== san) {
+      whatYouShouldHaveDone = `While <strong>${san}</strong> is playable, Stockfish suggests <strong>${bestSan}</strong> as slightly more accurate for central coordination.`;
+    } else {
+      whatYouShouldHaveDone = `Playing <strong>${san}</strong> was the absolute top Stockfish recommendation! You executed the most precise line available.`;
+    }
+
+    let whatYouMissed = '';
+    if (classification === 'Blunder' || classification === 'Mistake') {
+      whatYouMissed = `This move overlooked tactical threats or gave away material control. Watch out for hanging pieces, enemy lines of sight, and make sure every piece is adequately defended before advancing.`;
+    } else if (classification === 'Inaccuracy') {
+      whatYouMissed = `This move was slightly slow. You missed the opportunity to increase active pressure or stake a stronger claim in the center.`;
+    } else if (classification === 'Brilliant' || classification === 'Best Move') {
+      whatYouMissed = `Fantastic calculation! You didn't miss a beat—this move maximizes your tactical potential and puts maximum pressure on the opponent.`;
+    } else {
+      whatYouMissed = `Solid positional awareness. Your pieces are developing naturally, maintaining harmonious coordination across the board.`;
+    }
+
+    container.innerHTML = `
+      <div class="flex flex-col gap-3">
+        <!-- Move Summary Card -->
+        <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono font-bold text-blue-400">Move ${moveNum} (${isWhite ? 'White' : 'Black'})</span>
+            <span class="text-sm font-bold text-white font-mono px-2 py-0.5 bg-[#16161a] rounded border border-[#2a2a2e]">${san}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div>${badge}</div>
+            <span class="text-[11px] font-mono text-zinc-400">${moveItem.scoreFromWhite !== undefined ? (moveItem.scoreFromWhite > 0 ? `+${moveItem.scoreFromWhite.toFixed(1)}` : moveItem.scoreFromWhite.toFixed(1)) : '0.0'}</span>
+          </div>
+        </div>
+
+        <!-- Coach Naomi Detailed Breakdown Card -->
+        <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex flex-col gap-2.5">
+          <div class="flex items-center gap-1.5 border-b border-[#2a2a2e] pb-2">
+            <span class="text-sm">👑</span>
+            <h4 class="font-bold text-white text-[11px] uppercase tracking-wider">Coach Naomi's Grandmaster Analysis</h4>
+          </div>
+          
+          <div class="flex flex-col gap-2 text-xs text-zinc-300 leading-relaxed">
+            <p>
+              <strong class="text-blue-400">What you should have done:</strong> ${whatYouShouldHaveDone}
+            </p>
+            <p>
+              <strong class="text-cyan-400">What you missed:</strong> ${whatYouMissed}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Full Game Move List Breakdown Selector -->
+      <div class="border-t border-[#2a2a2e] pt-2.5 mt-1">
+        <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">Jump to Move Breakdown:</span>
+        <div class="flex flex-wrap gap-1 max-h-[100px] overflow-y-auto pr-1" id="dd-all-moves-nav">
+          ${this.moveHistory.map((m, i) => {
+            const pNum = i + 1;
+            const isSel = pNum === plyIndex;
+            return `
+              <button onclick="window.app.scrubDeepDiveToPly(${pNum})" class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold cursor-pointer transition-all ${
+                isSel 
+                  ? 'bg-blue-600 text-white shadow border border-blue-500' 
+                  : 'bg-[#0d0d0f] text-zinc-300 border border-[#2a2a2e] hover:bg-[#1f1f23]'
+              }">
+                ${Math.ceil(pNum/2)}. ${m.san}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }
 
   /**
@@ -1083,80 +1333,111 @@ class VanguardChessApp {
       return;
     }
 
+    const bestScore = candidateMoves[0]?.score ?? 0;
+
     // Best-move arrows on Main Line board
-    const arrows = candidateMoves.map(cand => {
+    const arrows = candidateMoves.map((cand) => {
       if (!cand.moveUci) return null;
+      const diff = Math.max(0, bestScore - (cand.score ?? 0));
+      let brush = 'green';
+      let rank = 1;
+      if (diff > 80) { brush = 'red'; rank = 4; }
+      else if (diff > 35) { brush = 'yellow'; rank = 3; }
+      else if (diff > 5) { brush = 'blue'; rank = 2; }
+
       return {
         from: cand.moveUci.substring(0, 2),
         to: cand.moveUci.substring(2, 4),
-        rank: cand.rank || 1
+        rank: rank,
+        brush: brush
       };
     }).filter(Boolean);
 
     this.mainLineBoard.setArrows(arrows);
 
     // Render candidate list items
-    const bestScore = candidateMoves[0]?.score ?? 0;
+    const tempChess = new Chess(currentFen);
     candidateMoves.forEach((cand, idx) => {
-      const sanMove = cand.san || cand.moveUci;
-      const diff = idx === 0 ? 0 : Math.max(0, bestScore - cand.score);
-
-      let tag = 'Best Move';
-      let tagBg = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
-      let borderStyle = 'border-emerald-500/20';
-      let evalColor = 'text-emerald-400';
-      let ringColor = 'ring-emerald-500';
-
-      if (idx > 0) {
-        if (diff <= 15) {
-          tag = 'Excellent';
-          tagBg = 'bg-teal-500/15 text-teal-400 border-teal-500/30';
-          borderStyle = 'border-teal-500/20';
-          evalColor = 'text-teal-400';
-          ringColor = 'ring-teal-500';
-        } else if (diff <= 50) {
-          tag = 'Good';
-          tagBg = 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-          borderStyle = 'border-blue-500/20';
-          evalColor = 'text-blue-400';
-          ringColor = 'ring-blue-500';
-        } else if (diff <= 120) {
-          tag = 'Inaccuracy';
-          tagBg = 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-          borderStyle = 'border-amber-500/20';
-          evalColor = 'text-amber-400';
-          ringColor = 'ring-amber-500';
-        } else {
-          tag = 'Mistake';
-          tagBg = 'bg-rose-500/15 text-rose-400 border-rose-500/30';
-          borderStyle = 'border-rose-500/20';
-          evalColor = 'text-rose-400';
-          ringColor = 'ring-rose-500';
+      let sanMove = cand.san;
+      if (!sanMove && cand.moveUci) {
+        const from = cand.moveUci.substring(0, 2);
+        const to = cand.moveUci.substring(2, 4);
+        const promotion = cand.moveUci.length > 4 ? cand.moveUci.substring(4, 5) : undefined;
+        try {
+          const testGame = new Chess(currentFen);
+          const m = testGame.move({ from, to, promotion });
+          if (m) sanMove = m.san;
+        } catch (err) {
+          // fallback
         }
       }
+      if (!sanMove) sanMove = cand.moveUci;
 
+      const diff = Math.max(0, bestScore - (cand.score ?? 0));
+      let rank = 1;
+      let tag = 'Best Move';
+      let tagBg = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+      let borderStyle = 'border-emerald-500/30';
+      let evalColor = 'text-emerald-400';
+      let ringColor = 'ring-emerald-500';
+      let rankBadge = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
+      let arrowDot = 'bg-emerald-500';
+
+      if (diff > 80) {
+        rank = 4;
+        tag = 'Suboptimal';
+        tagBg = 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+        borderStyle = 'border-rose-500/30';
+        evalColor = 'text-rose-400';
+        ringColor = 'ring-rose-500';
+        rankBadge = 'bg-rose-500/20 text-rose-400 border-rose-500/40';
+        arrowDot = 'bg-rose-500';
+      } else if (diff > 35) {
+        rank = 3;
+        tag = 'Alternative';
+        tagBg = 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+        borderStyle = 'border-amber-500/30';
+        evalColor = 'text-amber-400';
+        ringColor = 'ring-amber-500';
+        rankBadge = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+        arrowDot = 'bg-amber-500';
+      } else if (diff > 5) {
+        rank = 2;
+        tag = 'Excellent';
+        tagBg = 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+        borderStyle = 'border-blue-500/30';
+        evalColor = 'text-blue-400';
+        ringColor = 'ring-blue-500';
+        rankBadge = 'bg-blue-500/20 text-blue-400 border-blue-500/40';
+        arrowDot = 'bg-blue-500';
+      }
+
+      const isSelected = this.selectedBranchMove === cand.moveUci;
       const div = document.createElement('div');
-      div.className = `branch-item flex items-center justify-between p-3 rounded-lg bg-[#0d0d0f] border ${borderStyle} hover:border-blue-500/50 cursor-pointer shadow transition-all ${
-        this.selectedBranchMove === cand.moveUci ? `ring-2 ${ringColor} bg-[#16161a]` : ''
+      div.className = `branch-item flex items-center justify-between p-2.5 px-3 rounded-lg bg-[#0d0d0f] border ${borderStyle} hover:border-blue-500/50 cursor-pointer shadow transition-all ${
+        isSelected ? `ring-2 ${ringColor} bg-[#16161a]` : ''
       }`;
 
       div.innerHTML = `
-        <div class="flex items-center gap-3">
-          <span class="w-6 h-6 rounded-full bg-[#1c1c21] flex items-center justify-center font-bold text-xs text-zinc-300 border border-[#2a2a2e]">${idx + 1}</span>
-          <div>
-            <span class="font-bold text-white text-base">${sanMove}</span>
-            <span class="text-xs ml-2 px-2 py-0.5 rounded border ${tagBg}">${tag}</span>
+        <div class="flex items-center gap-2.5">
+          <div class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full ${arrowDot} shrink-0 shadow-sm" title="Board Arrow Color"></span>
+            <span class="w-5 h-5 rounded flex items-center justify-center font-mono font-bold text-xs border ${rankBadge}">${rank}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white text-sm font-mono">${sanMove}</span>
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded border ${tagBg}">${tag}</span>
           </div>
         </div>
-        <span class="font-mono text-sm font-semibold ${evalColor}">${cand.evalStr}</span>
+        <span class="font-mono text-xs font-semibold ${evalColor}">${cand.evalStr}</span>
       `;
 
       div.addEventListener('click', () => {
         this.selectedBranchMove = cand.moveUci;
         document.querySelectorAll('.branch-item').forEach(el => {
-          el.className = el.className.replace(/ring-2\s+ring-\w+-\d+\s+bg-\[#16161a\]/, '').trim();
+          el.classList.remove('ring-2', 'ring-emerald-500', 'ring-blue-500', 'ring-amber-500', 'ring-rose-500', 'bg-[#16161a]');
         });
-        div.classList.add('ring-2', ringColor.split(' ')[0], 'bg-[#16161a]');
+        div.classList.add('ring-2', ringColor, 'bg-[#16161a]');
 
         this.generateBranchContinuation(cand.moveUci);
       });
@@ -1583,21 +1864,25 @@ class VanguardChessApp {
   initOpeningExplorerUI() {
     const sideFilter = document.getElementById('opening-side-filter');
     if (sideFilter) {
-      sideFilter.addEventListener('change', () => this.renderOpeningDropdown());
+      sideFilter.addEventListener('change', () => {
+        this.renderOpeningDropdown();
+        this.renderOpeningExplorer();
+      });
     }
     
     // Add event listener for dropdown selection
     const select = document.getElementById('opening-select-dropdown');
     if (select) {
-        select.addEventListener('change', (e) => {
-            const val = e.target.value;
-            if (val === 'free_explore') {
-                this.openingIndex = -1;
-            } else {
-                this.openingIndex = OPENINGS_DATABASE.findIndex(op => op.id === val);
-            }
-            this.renderOpeningExplorer();
-        });
+      select.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const idx = OPENINGS_DATABASE.findIndex(op => op.id === val);
+        if (idx !== -1) {
+          this.openingIndex = idx;
+          this.openingPly = 0;
+          this.userFlippedOpeningBoard = false;
+        }
+        this.renderOpeningExplorer();
+      });
     }
 
     this.renderOpeningDropdown();
@@ -1609,72 +1894,136 @@ class VanguardChessApp {
     const sideFilter = document.getElementById('opening-side-filter');
     if (!select) return;
     
-    const selectedSide = sideFilter ? sideFilter.value : 'all';
-    const filteredOpenings = OPENINGS_DATABASE.filter(op => selectedSide === 'all' || op.side === selectedSide);
+    let selectedSide = sideFilter ? sideFilter.value : 'white';
+    if (selectedSide !== 'white' && selectedSide !== 'black') {
+      selectedSide = 'white';
+      if (sideFilter) sideFilter.value = 'white';
+    }
+
+    const mastered = JSON.parse(localStorage.getItem('hikari_mastered_openings') || '[]');
+    const filteredOpenings = OPENINGS_DATABASE.filter(op => op.side === selectedSide);
     
-    select.innerHTML = '<option value="free_explore">🌐 Free Exploration (Live Lichess DB)</option>' + filteredOpenings.map(op => `<option value="${op.id}">${op.eco} — ${op.name}</option>`).join('');
+    if (filteredOpenings.length === 0) {
+      select.innerHTML = '<option value="">No openings found</option>';
+      return;
+    }
+
+    const beginnerGroup = filteredOpenings.filter(op => op.tier === 'Beginner Core');
+    const intermediateGroup = filteredOpenings.filter(op => op.tier !== 'Beginner Core');
+
+    const formatOption = (op) => {
+      const isMastered = mastered.includes(op.id);
+      return `<option value="${op.id}">${isMastered ? '⭐ ' : ''}${op.eco} — ${op.name}</option>`;
+    };
+
+    let optionsHtml = '';
+    if (beginnerGroup.length > 0) {
+      optionsHtml += `<optgroup label="🌱 Beginner Core Repertoire">`;
+      optionsHtml += beginnerGroup.map(formatOption).join('');
+      optionsHtml += `</optgroup>`;
+    }
+    if (intermediateGroup.length > 0) {
+      optionsHtml += `<optgroup label="🚀 Intermediate / Advanced">`;
+      optionsHtml += intermediateGroup.map(formatOption).join('');
+      optionsHtml += `</optgroup>`;
+    }
+
+    select.innerHTML = optionsHtml;
     
-    // Handle index/selection update
-    if (this.openingIndex !== -1) {
-        const op = OPENINGS_DATABASE[this.openingIndex];
-        if (op) {
-            if (selectedSide === 'all' || op.side === selectedSide) {
-                select.value = op.id;
-            } else {
-                // If the currently selected opening is filtered out, select free_explore
-                select.value = 'free_explore';
-            }
-        }
+    // Ensure currently selected opening matches filter
+    const currentOp = OPENINGS_DATABASE[this.openingIndex];
+    if (currentOp && currentOp.side === selectedSide) {
+      select.value = currentOp.id;
     } else {
-        select.value = 'free_explore';
+      const firstIdx = OPENINGS_DATABASE.findIndex(op => op.id === filteredOpenings[0].id);
+      this.openingIndex = firstIdx !== -1 ? firstIdx : 0;
+      this.openingPly = 0;
+      this.userFlippedOpeningBoard = false;
+      select.value = filteredOpenings[0].id;
     }
   }
 
   renderOpeningExplorer() {
     const ecoBadge = document.getElementById('opening-eco-badge');
+    const sideBadge = document.getElementById('opening-side-badge');
+    const tierBadge = document.getElementById('opening-tier-badge');
+    const diffBadge = document.getElementById('opening-difficulty-badge');
     const titleHeader = document.getElementById('opening-title-header');
     const descText = document.getElementById('opening-desc-text');
     const plyCounter = document.getElementById('opening-ply-counter');
-    const commentaryEl = document.getElementById('opening-move-commentary');
+    const stepperChips = document.getElementById('opening-stepper-chips');
+    const theoryText = document.getElementById('opening-theory-text');
     const keyIdeasUl = document.getElementById('opening-key-ideas');
+    const plansContainer = document.getElementById('opening-plans-container');
+    const whatIfContainer = document.getElementById('opening-whatif-container');
+    const trapsContainer = document.getElementById('opening-traps-container');
+    const commentaryEl = document.getElementById('opening-move-commentary');
+    const evalBadge = document.getElementById('opening-move-eval-badge');
     const candContainer = document.getElementById('opening-candidates-container');
 
-    if (this.openingIndex === -1) {
-      if (!this.freeExploreGame) this.freeExploreGame = new Chess();
-      
-      if (ecoBadge) ecoBadge.textContent = 'LIVE';
-      if (titleHeader) titleHeader.textContent = 'Free Exploration Mode';
-      if (descText) descText.textContent = 'Play moves freely. We automatically fetch millions of Lichess Grandmaster games for your exact board position.';
-      if (plyCounter) plyCounter.textContent = `Ply ${this.freeExploreGame.history().length}`;
-      
-      if (this.openingBoard) {
-        this.openingBoard.setChessGame(this.freeExploreGame);
-        this.openingBoard.setInteractive(true);
-        const history = this.freeExploreGame.history({ verbose: true });
-        if (history.length > 0) {
-          const lastMove = history[history.length - 1];
-          this.openingBoard.setLastMove(lastMove.from, lastMove.to);
-        } else {
-          this.openingBoard.setLastMove(null, null);
-        }
-        this.openingBoard.renderBoard();
-      }
-      
-      if (keyIdeasUl) keyIdeasUl.innerHTML = '<li>Explore lines not in the local database.</li><li>See precise statistics for every candidate move.</li>';
-      if (commentaryEl) commentaryEl.innerHTML = '<div class="text-zinc-400 p-2 italic text-sm">Play a move on the board above to analyze!</div>';
-      
-      if (candContainer) candContainer.innerHTML = '<div class="p-4 text-center text-zinc-400 animate-pulse text-sm">Fetching Master Database... ♟️</div>';
-      
-      this.fetchLiveLichessMasters(this.freeExploreGame);
-      return;
+    if (this.openingIndex < 0 || this.openingIndex >= OPENINGS_DATABASE.length) {
+      this.openingIndex = 0;
     }
 
     const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
 
+    // Mastered button status
+    const masteredBtn = document.getElementById('opening-btn-mastered');
+    const masteredLabel = document.getElementById('opening-mastered-label');
+    const masteredStar = document.getElementById('opening-mastered-star');
+    const masteredList = JSON.parse(localStorage.getItem('hikari_mastered_openings') || '[]');
+    const isMastered = masteredList.includes(op.id);
+
+    if (masteredBtn && masteredLabel) {
+      if (isMastered) {
+        masteredBtn.className = 'px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/50 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm';
+        masteredLabel.textContent = 'Mastered Repertoire!';
+        if (masteredStar) masteredStar.textContent = '⭐';
+      } else {
+        masteredBtn.className = 'px-3 py-1.5 rounded-lg bg-[#0d0d0f] hover:bg-amber-500/10 text-zinc-400 hover:text-amber-300 border border-[#2a2a2e] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm';
+        masteredLabel.textContent = 'Mark Mastered';
+        if (masteredStar) masteredStar.textContent = '☆';
+      }
+    }
+
     if (ecoBadge) ecoBadge.textContent = op.eco;
+    if (tierBadge) {
+      tierBadge.textContent = op.tier || 'Beginner Core';
+      tierBadge.className = op.tier === 'Beginner Core'
+        ? 'px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30'
+        : 'px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold text-xs border border-indigo-500/30';
+    }
+    if (sideBadge) {
+      sideBadge.textContent = op.side === 'black' ? 'Black Opening' : 'White Opening';
+      sideBadge.className = op.side === 'black' 
+        ? 'px-2.5 py-1 rounded bg-purple-500/20 text-purple-300 font-mono font-bold text-xs border border-purple-500/30'
+        : 'px-2.5 py-1 rounded bg-blue-500/20 text-blue-300 font-mono font-bold text-xs border border-blue-500/30';
+    }
+    if (diffBadge) diffBadge.textContent = op.difficulty || 'Grandmaster';
     if (titleHeader) titleHeader.textContent = op.name;
     if (descText) descText.textContent = op.description;
     if (plyCounter) plyCounter.textContent = `Ply ${this.openingPly} / ${op.moves.length}`;
+
+    // Render Move Stepper Chips
+    if (stepperChips) {
+      let chipsHtml = `
+        <button class="opening-chip px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+          this.openingPly === 0 ? 'bg-blue-600 text-white shadow' : 'bg-[#1f1f23] text-zinc-300 hover:bg-[#2a2a30]'
+        }" data-ply="0">Start</button>
+      `;
+
+      for (let i = 0; i < op.moves.length; i++) {
+        const isCurrent = (this.openingPly === i + 1);
+        const moveNum = Math.floor(i / 2) + 1;
+        const prefix = (i % 2 === 0) ? `${moveNum}. ` : '';
+        chipsHtml += `
+          <button class="opening-chip px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+            isCurrent ? 'bg-blue-600 text-white shadow ring-1 ring-blue-400' : 'bg-[#1f1f23] text-zinc-300 hover:bg-[#2a2a30]'
+          }" data-ply="${i + 1}">${prefix}${op.moves[i]}</button>
+        `;
+      }
+      stepperChips.innerHTML = chipsHtml;
+    }
 
     // Replay position on opening board
     this.openingGame = new Chess();
@@ -1697,27 +2046,125 @@ class VanguardChessApp {
 
     if (this.openingBoard) {
       this.openingBoard.setChessGame(this.openingGame);
+      this.openingBoard.setInteractive(false);
+
+      if (!this.userFlippedOpeningBoard && this.openingPly === 0) {
+        this.openingBoard.setOrientation(op.side === 'black' ? 'black' : 'white');
+      }
+
       if (lastFrom && lastTo) {
         this.openingBoard.setLastMove(lastFrom, lastTo);
       } else {
         this.openingBoard.setLastMove(null, null);
       }
       this.openingBoard.renderBoard();
+
+      // Show next main line candidate move arrow on board if available
+      if (this.openingPly < op.moves.length) {
+        try {
+          const nextSan = op.moves[this.openingPly];
+          const testGame = new Chess(this.openingGame.fen());
+          const testMove = testGame.move(nextSan);
+          if (testMove) {
+            this.openingBoard.setArrows([
+              { from: testMove.from, to: testMove.to, rank: 1, brush: 'green' }
+            ]);
+          }
+        } catch (err) {
+          console.warn('Arrow generation error:', err);
+        }
+      }
     }
 
+    // Theory & Key Ideas
+    if (theoryText) theoryText.textContent = op.theoryOverview || op.description;
     if (keyIdeasUl) {
-      keyIdeasUl.innerHTML = op.keyIdeas.map(idea => `<li>${idea}</li>`).join('');
+      keyIdeasUl.innerHTML = op.keyIdeas.map(idea => `<li class="leading-relaxed">${idea}</li>`).join('');
     }
 
-    // Commentary for current ply
+    // Strategic Plans Panel
+    if (plansContainer) {
+      if (!op.keyPlans || op.keyPlans.length === 0) {
+        plansContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-2">Standard development plans apply.</div>';
+      } else {
+        plansContainer.innerHTML = op.keyPlans.map(plan => `
+          <div class="bg-[#0d0d0f] p-3.5 rounded-xl border border-[#2a2a2e] flex flex-col gap-2 hover:border-blue-500/40 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="font-extrabold text-blue-400 text-xs">${plan.title}</span>
+              <span class="text-[10px] font-mono font-bold text-zinc-400 px-2 py-0.5 rounded bg-[#1f1f23] border border-[#2a2a2e]">Target: ${plan.target}</span>
+            </div>
+            <p class="text-xs text-zinc-300 leading-relaxed">${plan.description}</p>
+            <div class="flex flex-wrap items-center gap-1.5 mt-1">
+              <span class="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Key Moves:</span>
+              ${plan.recommendedMoves.map(m => `<span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 font-mono text-[11px] font-bold border border-blue-500/20">${m}</span>`).join('')}
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // "What If..." Contingency Scenarios Panel
+    if (whatIfContainer) {
+      if (!op.whatIfScenarios || op.whatIfScenarios.length === 0) {
+        whatIfContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-2">Standard theoretical responses apply.</div>';
+      } else {
+        whatIfContainer.innerHTML = op.whatIfScenarios.map((sc, idx) => `
+          <div class="bg-[#0d0d0f] p-3.5 rounded-xl border border-[#2a2a2e] flex flex-col gap-2 hover:border-amber-500/40 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="font-extrabold text-amber-400 text-xs">${sc.title}</span>
+              <span class="text-[10px] font-mono font-bold text-amber-300 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">Scenario #${idx + 1}</span>
+            </div>
+            <div class="text-[11px] text-zinc-400 font-semibold bg-[#16161a] p-2 rounded border border-[#2a2a2e]">
+              ⚡ <span class="text-zinc-200">Trigger:</span> ${sc.trigger}
+            </div>
+            <p class="text-xs text-zinc-300 leading-relaxed"><span class="font-bold text-emerald-400">Winning Strategy:</span> ${sc.strategy}</p>
+            <div class="p-2 bg-amber-950/20 rounded border border-amber-800/30 text-xs text-amber-200/90 leading-relaxed">
+              💡 <span class="font-bold text-amber-300">Coach Naomi Advice:</span> ${sc.advice}
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 mt-1">
+              <span class="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Counter Moves:</span>
+              ${sc.counterMoves.map(m => `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-mono text-[11px] font-bold border border-emerald-500/20">${m}</span>`).join('')}
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Traps & Common Mistakes Panel
+    if (trapsContainer) {
+      if (!op.commonTrapsAndMistakes || op.commonTrapsAndMistakes.length === 0) {
+        trapsContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-3">No sharp immediate traps known for this solid variation. Focus on principled central development.</div>';
+      } else {
+        trapsContainer.innerHTML = op.commonTrapsAndMistakes.map(t => `
+          <div class="bg-[#0d0d0f] p-3.5 rounded-xl border border-red-900/30 flex flex-col gap-2 hover:border-red-500/50 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="font-extrabold text-red-400 text-xs flex items-center gap-1.5">⚠️ ${t.trapName}</span>
+              <span class="text-[10px] font-mono font-bold text-red-300 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20">Critical Trap</span>
+            </div>
+            <p class="text-xs text-zinc-300 leading-relaxed"><span class="font-bold text-zinc-200">The Danger:</span> ${t.description}</p>
+            <div class="p-2.5 bg-red-950/30 rounded-lg border border-red-800/40 text-xs text-red-200/90 leading-relaxed flex items-start gap-1.5">
+              <span>🎯</span>
+              <div>
+                <span class="font-bold text-red-300 block">How to punish or avoid:</span>
+                ${t.punishment}
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Move Breakdown Panel
     if (commentaryEl) {
       if (this.openingPly === 0) {
         commentaryEl.innerHTML = `
-          <p class="text-zinc-300">Starting position. Step forward to explore move-by-move annotations and GM candidate stats.</p>
+          <p class="text-zinc-300">Starting position. Step forward or click any move chip in the sequence above to explore move-by-move annotations and GM candidate stats.</p>
         `;
+        if (evalBadge) evalBadge.textContent = '0.00';
       } else {
         const comm = op.moveCommentary.find(c => c.ply === this.openingPly);
         if (comm) {
+          if (evalBadge) evalBadge.textContent = comm.evalStr || '+0.20';
           commentaryEl.innerHTML = `
             <div class="flex items-center gap-2 mb-2 font-mono font-extrabold text-blue-400 text-sm border-b border-blue-900/50 pb-1">
               <span>Move ${Math.ceil(comm.ply / 2)}: ${comm.move}</span>
@@ -1735,12 +2182,13 @@ class VanguardChessApp {
             </div>
           `;
         } else {
+          if (evalBadge) evalBadge.textContent = '+0.20';
           commentaryEl.innerHTML = `<p class="text-zinc-300">Move ${this.openingPly}: Continuation line in ${op.name}. Maintain active development!</p>`;
         }
       }
     }
 
-    // Render candidate move cards
+    // Candidate Move Cards
     if (candContainer) {
       if (op.candidates.length === 0) {
         candContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-4 text-center">Main line fully explored.</div>';
@@ -1773,131 +2221,19 @@ class VanguardChessApp {
     }
   }
 
-  async fetchLiveLichessMasters(customGame) {
-    const btn = document.getElementById('btn-fetch-lichess-masters');
-    if (btn) {
-      btn.textContent = 'Fetching Lichess Masters Database... ♟️';
-      btn.disabled = true;
-    }
-    
-    this.coach.speak("Connecting to the Lichess Masters Database to retrieve millions of high-level Grandmaster game stats for this position... 🌐", "tactical");
-
-    try {
-      const fen = customGame ? customGame.fen() : this.openingGame.fen();
-      const url = `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}`;
-      
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Lichess API HTTP ${res.status}`);
-      const data = await res.json();
-
-      // Update ECO and Title if found
-      if (data.opening) {
-        const ecoBadge = document.getElementById('opening-eco-badge');
-        const titleHeader = document.getElementById('opening-title-header');
-        if (ecoBadge) ecoBadge.textContent = data.opening.eco || 'ECO';
-        if (titleHeader) titleHeader.textContent = data.opening.name || 'Unknown Opening';
-      }
-
-      // Render candidates from live Lichess data
-      const candContainer = document.getElementById('opening-candidates-container');
-      const totalGamesLabel = document.getElementById('opening-total-games-label');
-
-      const totalMastersGames = (data.white || 0) + (data.draws || 0) + (data.black || 0);
-      if (totalGamesLabel) {
-        totalGamesLabel.textContent = `${totalMastersGames.toLocaleString()} Master Games`;
-      }
-
-      if (candContainer) {
-        if (!data.moves || data.moves.length === 0) {
-          candContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-4 text-center">No master games found in this position. Try an earlier position!</div>';
-        } else {
-          let html = '';
-          data.moves.slice(0, 5).forEach(m => {
-            const total = m.white + m.draws + m.black;
-            const winW = Math.round((m.white / total) * 100) || 0;
-            const draw = Math.round((m.draws / total) * 100) || 0;
-            const winB = 100 - winW - draw; // Avoid rounding display errors
-
-            html += `
-              <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-500/40 transition-colors">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono font-extrabold text-blue-400 text-sm px-2.5 py-1 bg-blue-500/10 rounded border border-blue-500/20">${m.san}</span>
-                  <span class="text-xs text-zinc-300 font-medium">Avg Rating: ${m.averageRating || 'Unknown'} (Performance: ${m.averagePerformance || 'N/A'})</span>
-                </div>
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                  <span class="text-[10px] font-mono text-zinc-400 min-w-[60px]">${total.toLocaleString()} games</span>
-                  <div class="flex h-3.5 w-32 rounded overflow-hidden text-[9px] font-mono text-white text-center font-bold">
-                    <div style="width:${winW}%" class="bg-emerald-600 flex items-center justify-center" title="White wins: ${winW}%">${winW}%</div>
-                    <div style="width:${draw}%" class="bg-zinc-600 flex items-center justify-center" title="Draws: ${draw}%">${draw}%</div>
-                    <div style="width:${winB}%" class="bg-red-600 flex items-center justify-center" title="Black wins: ${winB}%">${winB}%</div>
-                  </div>
-                </div>
-              </div>
-            `;
-          });
-          candContainer.innerHTML = html;
-        }
-      }
-
-      this.coach.speak("Lichess Masters database loaded! You can see the real win-loss margins of top Grandmasters in this exact line.", "happy");
-
-    } catch (err) {
-      console.warn('Lichess masters fetch failed:', err);
-      this.coach.speak("Lichess Masters API is currently busy. Try again in a few seconds!", "surprised");
-    } finally {
-      if (btn) {
-        btn.textContent = 'Fetch Live Lichess Masters Data';
-        btn.disabled = false;
-      }
-    }
-  }
-
   updateOpeningDisplay() {
     const sanHistory = this.moveHistory.map(m => m.san);
     const info = OpeningExplorer.identifyOpening(sanHistory);
 
     const liveLabel = document.getElementById('live-opening-label');
     if (liveLabel) {
-      // Set local fallback first
-      if (info && info.name !== 'Grandmaster Main Line') {
+      if (info) {
         liveLabel.textContent = `${info.eco} — ${info.name}`;
+      } else if (this.moveHistory.length === 0) {
+        liveLabel.textContent = 'Standard Starting Position';
       } else {
-        liveLabel.textContent = 'Searching Opening...';
+        liveLabel.textContent = 'Custom Position';
       }
-    }
-    
-    // BUG FIX: only query the live Lichess Masters explorer while still plausibly
-    // in known opening theory. Previously this fired on EVERY ply for the entire
-    // game (even move 28-40+ in a decided middlegame/endgame), spamming the console
-    // with failed requests once the position left the master database and wasting
-    // a network round trip every move for no benefit. Also stop retrying for the
-    // rest of the game after the API fails once, since a sustained outage or rate
-    // limit means repeated calls will just keep failing anyway.
-    const MAX_OPENING_PLY_FOR_LIVE_LOOKUP = 20; // ~10 full moves
-    const historyLen = this.game ? this.game.history().length : 0;
-
-    if (this.lichessExplorerUnavailable) {
-      // Already know this game's calls are failing - don't retry, local fallback stands.
-    } else if (historyLen > 0 && historyLen <= MAX_OPENING_PLY_FOR_LIVE_LOOKUP) {
-      const fen = this.game.fen();
-      fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=0`)
-        .then(res => {
-          if (!res.ok) throw new Error(`Lichess Explorer HTTP ${res.status}`);
-          return res.json();
-        })
-        .then(data => {
-          if (data && data.opening && liveLabel) {
-            liveLabel.textContent = `${data.opening.eco} — ${data.opening.name}`;
-          } else if (liveLabel && info) {
-             liveLabel.textContent = `${info.eco} — ${info.name}`; // fallback
-          }
-        })
-        .catch(err => {
-          this.lichessExplorerUnavailable = true;
-          if (liveLabel && info) liveLabel.textContent = `${info.eco} — ${info.name}`;
-        });
-    } else if (historyLen === 0) {
-      if (liveLabel) liveLabel.textContent = 'Standard Starting Position';
     }
   }
 
@@ -2083,30 +2419,55 @@ class VanguardChessApp {
 
     // SVG Polyline Path Generation
     const width = 600;
-    const height = 200;
+    const height = 40;
     const midY = height / 2;
-    const maxCp = 600;
+    const maxCp = 1500;
 
     const points = evals.map((cp, idx) => {
       const x = (idx / Math.max(1, evals.length - 1)) * width;
-      // Normalizing CP range [-600, +600] to Y [height, 0]
+      // White advantage (+cp) -> below midY (y > midY)
+      // Black advantage (-cp) -> above midY (y < midY)
       const clamped = Math.max(-maxCp, Math.min(maxCp, cp));
-      const y = midY - (clamped / maxCp) * (midY - 10);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
+      // Using a compressed scale (signed square root or gentle scaling) so standard evals don't stretch too much
+      const norm = clamped / maxCp;
+      const compressed = Math.sign(norm) * Math.pow(Math.abs(norm), 0.75);
+      const y = midY + compressed * (midY - 3);
+      return { x: parseFloat(x.toFixed(1)), y: parseFloat(y.toFixed(1)), cp, ply: idx };
     });
 
-    const pathD = `M 0,${midY} L ${points.join(' L ')}`;
+    const pathD = `M ${points[0].x},${points[0].y} ` + points.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
+    const pointsStr = points.map(p => `${p.x},${p.y}`).join(' L ');
 
+    const blackAreaD = `M 0,0 L 0,${points[0].y} L ${pointsStr} L ${width},${points[points.length - 1].y} L ${width},0 Z`;
+    const whiteAreaD = `M 0,${height} L 0,${points[0].y} L ${pointsStr} L ${width},${points[points.length - 1].y} L ${width},${height} Z`;
+
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.innerHTML = `
-      <line x1="0" y1="${midY}" x2="${width}" y2="${midY}" stroke="#3a3a3e" stroke-width="1.5" stroke-dasharray="4,4"/>
-      <path d="${pathD}" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      ${evals.map((cp, idx) => {
-        const x = (idx / Math.max(1, evals.length - 1)) * width;
-        const clamped = Math.max(-maxCp, Math.min(maxCp, cp));
-        const y = midY - (clamped / maxCp) * (midY - 10);
-        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${cp >= 0 ? '#10b981' : '#ef4444'}" stroke="#0d0d0f" stroke-width="1.5"/>`;
+      <path d="${blackAreaD}" fill="#18181b" opacity="0.95"/>
+      <path d="${whiteAreaD}" fill="#f4f4f5" opacity="0.95"/>
+      <path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${points.map(p => {
+        const isActive = p.ply === this.deepDivePly;
+        if (isActive) {
+          return `
+            <circle cx="${p.x}" cy="${p.y}" r="6" fill="#38bdf8" fill-opacity="0.3" class="animate-ping"/>
+            <circle cx="${p.x}" cy="${p.y}" r="4" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" class="cursor-pointer eval-point" data-ply="${p.ply}"/>
+          `;
+        }
+        return `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="${p.cp >= 0 ? '#10b981' : '#f43f5e'}" stroke="#0d0d0f" stroke-width="1" class="cursor-pointer hover:r-4 transition-all eval-point" data-ply="${p.ply}"/>`;
       }).join('')}
     `;
+
+    // Click handler for points to scrub Deep Dive position
+    svg.onclick = (evt) => {
+      const pointEl = evt.target.closest('.eval-point');
+      if (pointEl && pointEl.dataset.ply !== undefined) {
+        const targetPly = parseInt(pointEl.dataset.ply, 10);
+        if (!isNaN(targetPly)) {
+          this.scrubDeepDiveToPly(targetPly);
+        }
+      }
+    };
   }
 }
 

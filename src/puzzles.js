@@ -161,60 +161,28 @@ export class PuzzleTrainer {
   }
 
   /**
-   * Fetch Lichess Daily Puzzle live
+   * Select Daily Puzzle locally from verified offline puzzles without external calls
    */
   async fetchLichessDailyPuzzle() {
     try {
-      const res = await fetch('https://lichess.org/api/puzzle/daily');
-      if (!res.ok) throw new Error(`Lichess API HTTP ${res.status}`);
-      const data = await res.json();
-
-      const pData = data.puzzle;
-      const gameData = data.game;
-
-      // Parse starting FEN and turn from PGN
-      let startingFen = 'r1bqk2r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4'; // default fallback
-      let puzzleTurn = 'w';
-      if (gameData.pgn) {
-        try {
-          const tempGame = new Chess();
-          tempGame.loadPgn(gameData.pgn);
-          const moves = tempGame.history({ verbose: true });
-          
-          const replayGame = new Chess();
-          const targetPly = pData.initialPly || moves.length;
-          for (let i = 0; i < targetPly; i++) {
-            if (moves[i]) {
-              replayGame.move(moves[i]);
-            }
-          }
-          startingFen = replayGame.fen();
-          puzzleTurn = replayGame.turn();
-        } catch (err) {
-          console.warn('Error replaying Lichess PGN:', err);
-        }
-      }
+      // Pick a puzzle deterministically based on today's date
+      const today = new Date();
+      const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+      const puzzleIndex = dayOfYear % VERIFIED_PUZZLES.length;
+      const basePuzzle = VERIFIED_PUZZLES[puzzleIndex];
 
       this.customPuzzle = {
-        id: `lichess_${pData.id}`,
-        title: `Lichess Daily Puzzle #${pData.id}`,
-        fen: startingFen,
-        pgn: gameData.pgn,
-        initialPly: pData.initialPly,
-        solution: pData.solution || [], // UCI moves
-        turn: puzzleTurn,
-        rating: pData.rating || 1500,
-        theme: (pData.themes || []).slice(0, 3).join(', ') || 'Tactics',
-        description: `Lichess Daily Puzzle (Rating ${pData.rating || 1500}). Find the best continuation!`,
-        hint: 'Calculate forcing checks, captures, and piece attacks!',
-        whyItWorks: `Lichess Tactical Line solved! Rating: ${pData.rating}. Themes: ${(pData.themes || []).slice(0, 3).join(', ')}.`
+        ...basePuzzle,
+        id: `daily_${basePuzzle.id}`,
+        title: `Daily Puzzle — ${basePuzzle.title}`,
+        description: `Daily Tactical Challenge (${basePuzzle.theme}): Find the winning continuation!`
       };
 
       this.resetProgress();
       if (this.onPuzzleChange) this.onPuzzleChange(this.getCurrentPuzzle());
       return { success: true, puzzle: this.customPuzzle };
     } catch (e) {
-      console.warn('Lichess Daily Puzzle fetch failed:', e);
+      console.warn('Daily Puzzle load failed:', e);
       return { success: false, error: e.message };
     }
   }
