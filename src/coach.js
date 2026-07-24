@@ -6,7 +6,6 @@
 import { Chess } from 'chess.js';
 import { ChessEngine } from './engine.js';
 import { ChessBoardUI, getPieceSvg } from './board.js';
-import { CoachNaomi } from './coach.js';
 import { Storage } from './storage.js';
 import { ChessClock } from './clock.js';
 import { PuzzleTrainer } from './puzzles.js';
@@ -2071,7 +2070,7 @@ class VanguardChessApp {
     `;
   }
 }
-
+export { CoachNaomi };
 // Bootstrap application on DOM load
 window.addEventListener('DOMContentLoaded', () => {
   window.hikariApp = new VanguardChessApp();
