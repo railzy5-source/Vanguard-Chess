@@ -110,8 +110,10 @@ export class ChessEngine {
                         this.worker = null;
 
 
-                        if(this.readyResolve)
+                        if(this.readyResolve) {
                             this.readyResolve(false);
+                            this.readyResolve = null;
+                        }
 
                     };
 
@@ -120,6 +122,31 @@ export class ChessEngine {
                 this.sendCommand(
                     'uci'
                 );
+
+
+                // Watchdog: if the CDN script never loads or the engine
+                // never answers 'uciok'/'readyok' (blocked by an ad
+                // blocker/firewall, offline, CDN outage, etc.), neither
+                // onmessage nor onerror may ever fire. Without this,
+                // every readyPromise-await in the app (getBestMove,
+                // analyzePosition) would hang forever with zero error,
+                // which freezes the whole game right after the player's
+                // move (timer keeps running, but coach/engine go silent).
+                setTimeout(() => {
+
+                    if(this.readyResolve) {
+
+                        console.warn(
+                            'Stockfish did not become ready in time (CDN blocked/unreachable?). Falling back to the built-in analyzer.'
+                        );
+
+                        this.worker = null;
+                        this.readyResolve(false);
+                        this.readyResolve = null;
+
+                    }
+
+                }, 6000);
 
 
             }
