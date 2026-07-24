@@ -35,7 +35,7 @@ class VanguardChessApp {
     this.coach = new CoachNaomi();
     this.settings = Storage.getSettings();
     
-    // Initialize LLM Coach (optional, falls back gracefully)
+    // Initialize LLM Coach
     this.llmCoach = new LLMCoach();
 
     // Centralized Game State
@@ -170,7 +170,6 @@ class VanguardChessApp {
     this.renderEvalGraph();
     this.initOpeningExplorerUI();
 
-    // If AI plays White, trigger AI move
     if (this.playerColor === 'black') {
       setTimeout(() => this.triggerAiMove(), 600);
     } else {
@@ -178,10 +177,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Check if a move is in the opening book
-   * This prevents false "mistake" classifications for principled opening moves
-   */
   isBookMove(moveSan) {
     const sanHistory = this.moveHistory.map(m => m.san);
     const testHistory = [...sanHistory, moveSan];
@@ -249,7 +244,6 @@ class VanguardChessApp {
     if (this.mainLineBoard) this.mainLineBoard.setBoardTheme(themeName);
     if (this.branchBoard) this.branchBoard.setBoardTheme(themeName);
     if (this.openingBoard) this.openingBoard.setBoardTheme(themeName);
-
     this.applyBgTheme(this.settings.bgTheme || 'auto');
   }
 
@@ -346,11 +340,7 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Bind event listeners for Tabs, Navigation Scrubbers, Controls, and Settings
-   */
   bindEvents() {
-    // Navigation Tabs
     const tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(tab => {
       tab.addEventListener('click', (e) => {
@@ -359,73 +349,24 @@ class VanguardChessApp {
       });
     });
 
-    // Game Scrubber Controls
     document.getElementById('btn-first')?.addEventListener('click', () => this.scrubGameToPly(0));
     document.getElementById('btn-back')?.addEventListener('click', () => this.scrubGameToPly(this.currentPlyIndex - 1));
     document.getElementById('btn-next')?.addEventListener('click', () => this.scrubGameToPly(this.currentPlyIndex + 1));
     document.getElementById('btn-current')?.addEventListener('click', () => this.scrubGameToPly(this.moveHistory.length));
 
-    // Game Action Buttons
     document.getElementById('btn-undo')?.addEventListener('click', () => this.handleUndo());
     document.getElementById('btn-resign')?.addEventListener('click', () => this.handleResign());
     document.getElementById('btn-new-game')?.addEventListener('click', () => this.resetGame());
     document.getElementById('btn-expand')?.addEventListener('click', () => this.toggleFullscreen());
 
-    // Deep Dive Main Line Scrubber
     document.getElementById('dd-btn-first')?.addEventListener('click', () => this.scrubDeepDiveToPly(0));
     document.getElementById('dd-btn-back')?.addEventListener('click', () => this.scrubDeepDiveToPly(this.deepDivePly - 1));
     document.getElementById('dd-btn-next')?.addEventListener('click', () => this.scrubDeepDiveToPly(this.deepDivePly + 1));
     document.getElementById('dd-btn-current')?.addEventListener('click', () => this.scrubDeepDiveToPly(this.moveHistory.length));
 
-    // Branch Line Scrubber
     document.getElementById('branch-btn-prev')?.addEventListener('click', () => this.scrubBranchPly(this.branchPlyIndex - 1));
     document.getElementById('branch-btn-next')?.addEventListener('click', () => this.scrubBranchPly(this.branchPlyIndex + 1));
 
-        // API Key Settings
-    document.getElementById('btn-save-api-key')?.addEventListener('click', () => {
-      const input = document.getElementById('setting-gemini-key');
-      const status = document.getElementById('api-key-status');
-      const key = input?.value?.trim();
-      
-      if (key && key.length > 10) {
-        this.llmCoach.setApiKey('gemini', key);
-        if (status) {
-          status.textContent = '✅ Status: Gemini API configured and ready!';
-          status.className = 'text-[10px] text-emerald-400';
-        }
-        input.value = '';
-        this.coach.speak('Gemini API key saved! I can now provide much deeper chess insights! 🎉', 'happy');
-      } else {
-        if (status) {
-          status.textContent = '⚠️ Please enter a valid Gemini API key (starts with "AIza")';
-          status.className = 'text-[10px] text-amber-400';
-        }
-      }
-    });
-
-    document.getElementById('btn-clear-api-key')?.addEventListener('click', () => {
-      const status = document.getElementById('api-key-status');
-      this.llmCoach.clearApiKey();
-      if (status) {
-        status.textContent = 'ℹ️ Status: API key cleared (using heuristic coach)';
-        status.className = 'text-[10px] text-zinc-400';
-      }
-      this.coach.speak('API key cleared. I\'ll use my heuristic coach mode for explanations.', 'supportive');
-    });
-
-    // Check API key status on load
-    const statusEl = document.getElementById('api-key-status');
-    if (statusEl) {
-      if (this.llmCoach.isReady()) {
-        statusEl.textContent = '✅ Status: Gemini API configured and ready!';
-        statusEl.className = 'text-[10px] text-emerald-400';
-      } else {
-        statusEl.textContent = 'ℹ️ Status: Not configured (using heuristic coach)';
-        statusEl.className = 'text-[10px] text-zinc-400';
-      }
-    }
-
-    // Keyboard Arrow navigation for Deep Dive
     document.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
 
@@ -446,12 +387,10 @@ class VanguardChessApp {
       }
     });
 
-    // Time Control selector
     document.getElementById('time-control-select')?.addEventListener('change', (e) => {
       this.clock.setTimeControl(e.target.value);
     });
 
-    // Opening Explorer Sub-Tab Switching
     document.querySelectorAll('.opening-subtab-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const targetTab = e.currentTarget.dataset.subtab;
@@ -476,13 +415,11 @@ class VanguardChessApp {
       });
     });
 
-    // Opening Side Filter Change
     document.getElementById('opening-side-filter')?.addEventListener('change', () => {
       this.renderOpeningDropdown();
       this.renderOpeningExplorer();
     });
 
-    // Opening Stepper Chips Click Delegate
     document.getElementById('opening-stepper-chips')?.addEventListener('click', (e) => {
       const chip = e.target.closest('.opening-chip');
       if (chip && chip.dataset.ply !== undefined) {
@@ -492,7 +429,6 @@ class VanguardChessApp {
       }
     });
 
-    // Opening Explorer Stepper Controls & Flip
     document.getElementById('opening-select-dropdown')?.addEventListener('change', (e) => {
       const selectedId = e.target.value;
       const index = OPENINGS_DATABASE.findIndex(o => o.id === selectedId);
@@ -535,7 +471,6 @@ class VanguardChessApp {
       this.renderOpeningExplorer();
     });
 
-    // Mark as Mastered Toggle
     document.getElementById('opening-btn-mastered')?.addEventListener('click', () => {
       const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
       let mastered = JSON.parse(localStorage.getItem('hikari_mastered_openings') || '[]');
@@ -551,7 +486,6 @@ class VanguardChessApp {
       this.renderOpeningDropdown();
     });
 
-    // Practice Position Against Bot
     document.getElementById('opening-btn-practice-bot')?.addEventListener('click', () => {
       const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
       if (this.openingGame) {
@@ -561,20 +495,16 @@ class VanguardChessApp {
         this.gameBoard.setOrientation(op.side === 'black' ? 'black' : 'white');
         this.moveHistory = [];
         this.gameActive = true;
-
         this.switchTab('play');
-
         this.coach.speak(`⚔️ Practice position loaded for ${op.name}! Make your move against Coach Naomi!`, 'flirty');
       }
     });
 
-    // Game Review Refresh Button
     document.getElementById('btn-generate-review')?.addEventListener('click', () => {
       this.renderEvalGraph();
       this.coach.speak('Game Review updated! Check out your centipawn evaluation graph and move accuracy counts!', 'happy');
     });
 
-    // Settings Inputs
     document.getElementById('setting-color')?.addEventListener('change', (e) => {
       this.settings.playerColor = e.target.value;
       Storage.saveSettings(this.settings);
@@ -635,13 +565,52 @@ class VanguardChessApp {
       this.coach.speak(`AI Grandmaster difficulty changed to ${this.settings.difficulty}! Let's see if you can keep up!`, 'flirty');
     });
 
-    // Save Game Button
     document.getElementById('btn-save-game')?.addEventListener('click', () => this.handleSaveGame());
+
+    // API Key Settings
+    document.getElementById('btn-save-api-key')?.addEventListener('click', () => {
+      const input = document.getElementById('setting-gemini-key');
+      const status = document.getElementById('api-key-status');
+      const key = input?.value?.trim();
+      
+      if (key && key.length > 10) {
+        this.llmCoach.setApiKey('gemini', key);
+        if (status) {
+          status.textContent = '✅ Status: Gemini API configured and ready!';
+          status.className = 'text-[10px] text-emerald-400';
+        }
+        input.value = '';
+        this.coach.speak('Gemini API key saved! I can now provide much deeper chess insights! 🎉', 'happy');
+      } else {
+        if (status) {
+          status.textContent = '⚠️ Please enter a valid Gemini API key (starts with "AIza")';
+          status.className = 'text-[10px] text-amber-400';
+        }
+      }
+    });
+
+    document.getElementById('btn-clear-api-key')?.addEventListener('click', () => {
+      const status = document.getElementById('api-key-status');
+      this.llmCoach.clearApiKey();
+      if (status) {
+        status.textContent = 'ℹ️ Status: API key cleared (using heuristic coach)';
+        status.className = 'text-[10px] text-zinc-400';
+      }
+      this.coach.speak('API key cleared. I\'ll use my heuristic coach mode for explanations.', 'supportive');
+    });
+
+    const statusEl = document.getElementById('api-key-status');
+    if (statusEl) {
+      if (this.llmCoach.isReady()) {
+        statusEl.textContent = '✅ Status: Gemini API configured and ready!';
+        statusEl.className = 'text-[10px] text-emerald-400';
+      } else {
+        statusEl.textContent = 'ℹ️ Status: Not configured (using heuristic coach)';
+        statusEl.className = 'text-[10px] text-zinc-400';
+      }
+    }
   }
 
-  /**
-   * Switch Active Application Tab
-   */
   switchTab(tabId) {
     document.querySelectorAll('.nav-tab').forEach(t => {
       if (t.dataset.tab === tabId) {
@@ -674,9 +643,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Handle move played by user
-   */
   async handlePlayerMove(move) {
     if (!this.gameActive) return;
 
@@ -687,7 +653,6 @@ class VanguardChessApp {
 
     const uci = move.from + move.to + (move.promotion || '');
     
-    // 1. Analyze the move quality before applying next state
     this.game.undo();
     const fenBefore = this.game.fen();
     this.game.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' });
@@ -697,7 +662,6 @@ class VanguardChessApp {
     let playedScore = 0;
     let scoreFromWhite = 0;
 
-    // Check if this is a book move FIRST — this prevents false "mistake" flags
     const sanHistory = this.moveHistory.map(m => m.san);
     const bookCheck = this.isBookMove(move.san);
     let isBookMove = false;
@@ -722,7 +686,6 @@ class VanguardChessApp {
         scoreFromWhite = move.color === 'w' ? playedScore : -playedScore;
         const diff = Math.max(0, topScore - playedScore);
 
-        // Use MoveClassifier with book override
         const result = MoveClassifier.classifyMove({
           playedUci: uci,
           bestUci: bestUci,
@@ -734,8 +697,6 @@ class VanguardChessApp {
         });
 
         classification = result.classification;
-
-        // Accuracy tracking
         const moveAcc = Math.max(15, Math.round(100 * Math.exp(-0.003 * diff)));
         this.playerAccuracyScores.push(moveAcc);
       }
@@ -743,12 +704,10 @@ class VanguardChessApp {
       console.error('Error classifying player move:', err);
     }
 
-    // If it's a book move, override classification
     if (isBookMove) {
       classification = 'Book';
     }
 
-    // Get facts for the coach
     const facts = FactsEngine.analyze(this.game);
 
     this.moveHistory.push({
@@ -775,13 +734,11 @@ class VanguardChessApp {
     this.updateOpeningDisplay();
     this.gameBoard.clearArrows();
 
-    // Check game over
     if (this.checkGameOver()) {
       this.clock.stopTimer();
       return;
     }
 
-    // Coach reaction with LLM support
     const moveResult = {
       san: move.san,
       piece: move.piece,
@@ -799,7 +756,6 @@ class VanguardChessApp {
 
     await this.coach.reactToMove(moveResult);
 
-    // AI Turn
     const isAiTurn = (this.playerColor === 'white' && this.game.turn() === 'b') ||
                      (this.playerColor === 'black' && this.game.turn() === 'w');
 
@@ -810,9 +766,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Trigger Stockfish AI move calculation and execution
-   */
   async triggerAiMove() {
     if (!this.gameActive || this.isAiThinking) return;
 
@@ -828,7 +781,6 @@ class VanguardChessApp {
       const result = await this.engine.getBestMove(this.game.fen(), this.settings.difficulty, this.settings.chessElo || 1500);
       let bestMoveUci = result.bestMove;
 
-      // Apply blunder chance at low elo
       if (result.blunderChance > 0 && Math.random() < result.blunderChance) {
         const legalMoves = this.game.moves({ verbose: true });
         if (legalMoves.length > 0) {
@@ -870,8 +822,6 @@ class VanguardChessApp {
           }
           
           const scoreFromWhite = moveRes.color === 'w' ? aiScore : -aiScore;
-
-          // Get facts for opponent move
           const facts = FactsEngine.analyze(this.game);
 
           this.moveHistory.push({
@@ -931,9 +881,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Calculate and display Stockfish best-move arrows on the game board
-   */
   async updateBestMoveArrows() {
     if (!this.settings.showArrows || !this.gameActive) return;
 
@@ -1004,9 +951,6 @@ class VanguardChessApp {
     });
   }
 
-  /**
-   * Check if game has concluded (checkmate, draw, stalemate)
-   */
   checkGameOver() {
     if (this.game.isGameOver()) {
       this.gameActive = false;
@@ -1031,9 +975,6 @@ class VanguardChessApp {
     return false;
   }
 
-  /**
-   * Scrub main game history via scrubber timeline
-   */
   scrubGameToPly(plyIndex) {
     if (plyIndex < 0 || plyIndex > this.moveHistory.length) return;
 
@@ -1062,9 +1003,6 @@ class VanguardChessApp {
     this.updateCapturedPieces();
   }
 
-  /**
-   * Handle Undo button (removes 1 full turn pair = 2 plies)
-   */
   handleUndo() {
     if (this.moveHistory.length === 0) return;
 
@@ -1102,9 +1040,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Handle Resign button
-   */
   handleResign() {
     if (!this.gameActive) return;
 
@@ -1116,9 +1051,6 @@ class VanguardChessApp {
     this.coach.reactToResign();
   }
 
-  /**
-   * Reset game state for a new match
-   */
   resetGame() {
     this.game = new Chess();
     this.moveHistory = [];
@@ -1150,9 +1082,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Toggle fullscreen mode for the game board
-   */
   toggleFullscreen() {
     const wrapper = document.getElementById('game-board-container');
     if (!wrapper) return;
@@ -1166,17 +1095,11 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Deep Dive Tab Initialization
-   */
   async initDeepDive() {
     this.deepDivePly = this.moveHistory.length;
     this.scrubDeepDiveToPly(this.deepDivePly);
   }
 
-  /**
-   * Scrub position on Main Line Board in Deep Dive
-   */
   async scrubDeepDiveToPly(plyIndex) {
     if (plyIndex < 0 || plyIndex > this.moveHistory.length) return;
 
@@ -1206,9 +1129,6 @@ class VanguardChessApp {
     this.updateDeepDiveCoachReview(plyIndex);
   }
 
-  /**
-   * Update Coach Naomi Detailed Move Breakdown & Game Review panel in Deep Dive
-   */
   updateDeepDiveCoachReview(plyIndex) {
     const container = document.getElementById('dd-coach-breakdown-content');
     const counterEl = document.getElementById('dd-coach-review-counter');
@@ -1340,9 +1260,6 @@ class VanguardChessApp {
     return `<span class="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border ${cfg.style} font-sans ml-1 font-semibold">${cfg.text}</span>`;
   }
 
-  /**
-   * Load Stockfish MultiPV branch candidates for the Deep Dive position
-   */
   async loadBranchCandidates() {
     const branchContainer = document.getElementById('dd-branch-list');
     if (!branchContainer) return;
@@ -1473,20 +1390,13 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Generate 10-ply continuation line for selected branch move and update Branch Board
-   */
   generateBranchContinuation(moveUci) {
     const fen = this.deepDiveGame.fen();
     this.continuationLine = this.engine.getContinuationLine(fen, moveUci, 10);
     this.branchPlyIndex = 0;
-
     this.scrubBranchPly(0);
   }
 
-  /**
-   * Scrub through the 10-ply continuation line on Branch Board
-   */
   scrubBranchPly(plyIndex) {
     if (!this.continuationLine.length) return;
     if (plyIndex < 0 || plyIndex >= this.continuationLine.length) return;
@@ -1511,9 +1421,6 @@ class VanguardChessApp {
     this.renderContinuationTimeline();
   }
 
-  /**
-   * Render the interactive 10-ply sequence timeline buttons in Deep Dive
-   */
   renderContinuationTimeline() {
     const container = document.getElementById('dd-continuation-timeline');
     if (!container) return;
@@ -1548,9 +1455,6 @@ class VanguardChessApp {
     });
   }
 
-  /**
-   * Save current game to LocalStorage
-   */
   handleSaveGame() {
     const saved = Storage.saveGame({
       pgn: this.game.pgn(),
@@ -1566,9 +1470,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Load a saved game from LocalStorage into Deep Dive tab
-   */
   loadSavedGameIntoDeepDive(gameId) {
     const gameRecord = Storage.getGameById(gameId);
     if (!gameRecord) return;
@@ -1581,9 +1482,6 @@ class VanguardChessApp {
     this.coach.speak(`Loaded "${gameRecord.title}" into Deep Dive review! Let's examine every key moment.`, 'tactical');
   }
 
-  /**
-   * Render Saved Games List Panel in Menu Tab
-   */
   renderSavedGamesList() {
     const container = document.getElementById('saved-games-list');
     if (!container) return;
@@ -1621,9 +1519,6 @@ class VanguardChessApp {
     });
   }
 
-  /**
-   * Update Move History Table on Game Tab
-   */
   updateMoveTable() {
     const container = document.getElementById('move-history-table');
     if (!container) return;
@@ -1681,9 +1576,6 @@ class VanguardChessApp {
     }`;
   }
 
-  /**
-   * Recalculate and update Win Probability, Engine Evaluation, and Best Move Accuracy in real-time
-   */
   async updateMatchMetrics(playerPlayedMove = null) {
     const fen = this.game.fen();
 
@@ -1774,9 +1666,6 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Update Captured Pieces Display
-   */
   updateCapturedPieces() {
     const capturedWhiteContainer = document.getElementById('captured-white');
     const capturedBlackContainer = document.getElementById('captured-black');
@@ -1820,9 +1709,6 @@ class VanguardChessApp {
     capturedBlackContainer.innerHTML = capturedBlackHtml || '<span class="text-xs text-zinc-500">None</span>';
   }
 
-  /**
-   * Update Timeline Progress Bar & Ply Badge
-   */
   updateTimelineProgress() {
     const progressBar = document.getElementById('timeline-progress-bar');
     const thumb = document.getElementById('timeline-thumb');
@@ -1836,9 +1722,6 @@ class VanguardChessApp {
     if (badge) badge.textContent = `${totalPlies} Plies`;
   }
 
-  /**
-   * Opening Book Explorer UI Handling
-   */
   initOpeningExplorerUI() {
     const sideFilter = document.getElementById('opening-side-filter');
     if (sideFilter) {
@@ -1979,7 +1862,6 @@ class VanguardChessApp {
     if (descText) descText.textContent = op.description;
     if (plyCounter) plyCounter.textContent = `Ply ${this.openingPly} / ${op.moves.length}`;
 
-    // Render Move Stepper Chips
     if (stepperChips) {
       let chipsHtml = `
         <button class="opening-chip px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
@@ -2000,7 +1882,6 @@ class VanguardChessApp {
       stepperChips.innerHTML = chipsHtml;
     }
 
-    // Replay position on opening board
     this.openingGame = new Chess();
     let lastFrom = null;
     let lastTo = null;
@@ -2050,13 +1931,11 @@ class VanguardChessApp {
       }
     }
 
-    // Theory & Key Ideas
     if (theoryText) theoryText.textContent = op.theoryOverview || op.description;
     if (keyIdeasUl) {
       keyIdeasUl.innerHTML = op.keyIdeas.map(idea => `<li class="leading-relaxed">${idea}</li>`).join('');
     }
 
-    // Strategic Plans Panel
     if (plansContainer) {
       if (!op.keyPlans || op.keyPlans.length === 0) {
         plansContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-2">Standard development plans apply.</div>';
@@ -2077,7 +1956,6 @@ class VanguardChessApp {
       }
     }
 
-    // "What If..." Contingency Scenarios Panel
     if (whatIfContainer) {
       if (!op.whatIfScenarios || op.whatIfScenarios.length === 0) {
         whatIfContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-2">Standard theoretical responses apply.</div>';
@@ -2104,7 +1982,6 @@ class VanguardChessApp {
       }
     }
 
-    // Traps & Common Mistakes Panel
     if (trapsContainer) {
       if (!op.commonTrapsAndMistakes || op.commonTrapsAndMistakes.length === 0) {
         trapsContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-3">No sharp immediate traps known for this solid variation. Focus on principled central development.</div>';
@@ -2128,7 +2005,6 @@ class VanguardChessApp {
       }
     }
 
-    // Move Breakdown Panel
     if (commentaryEl) {
       if (this.openingPly === 0) {
         commentaryEl.innerHTML = `
@@ -2162,7 +2038,6 @@ class VanguardChessApp {
       }
     }
 
-    // Candidate Move Cards
     if (candContainer) {
       if (op.candidates.length === 0) {
         candContainer.innerHTML = '<div class="text-xs text-zinc-500 italic p-4 text-center">Main line fully explored.</div>';
@@ -2211,17 +2086,13 @@ class VanguardChessApp {
     }
   }
 
-  /**
-   * Render Centipawn Evaluation SVG Line Graph & Classification Badges Summary
-   */
   renderEvalGraph() {
     const svg = document.getElementById('eval-graph-svg');
     if (!svg) return;
 
-    // Reset move counts
     this.moveClassCounts = { brilliant: 0, great: 0, best: 0, excellent: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
 
-    const evals = [0]; // Starting position evaluation = 0
+    const evals = [0];
     let lastCp = 0;
 
     this.moveHistory.forEach((m, idx) => {
@@ -2229,7 +2100,6 @@ class VanguardChessApp {
       if (m.scoreFromWhite !== undefined && m.scoreFromWhite !== null) {
         cp = m.scoreFromWhite;
       } else {
-        // Fallback smooth deterministic evaluation pattern
         const wave = (Math.sin(idx * 0.8) * 50) + ((idx % 3 === 0) ? 40 : -20);
         cp = lastCp + Math.round(wave);
         cp = Math.max(-1000, Math.min(1000, cp));
@@ -2237,7 +2107,6 @@ class VanguardChessApp {
       lastCp = cp;
       evals.push(cp);
 
-      // Count move classifications
       if (m.classification) {
         const cls = m.classification.toLowerCase();
         if (cls === 'brilliant') this.moveClassCounts.brilliant++;
@@ -2252,7 +2121,6 @@ class VanguardChessApp {
       }
     });
 
-    // Update count labels
     const setEl = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
@@ -2266,13 +2134,11 @@ class VanguardChessApp {
     setEl('count-mistake', this.moveClassCounts.mistake);
     setEl('count-blunder', this.moveClassCounts.blunder);
 
-    // SVG Polyline Path Generation
     const width = 600;
     const height = 40;
     const midY = height / 2;
     const maxCp = 1500;
 
-    // If no moves, show a flat line at 0
     if (evals.length < 2) {
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       svg.innerHTML = `
@@ -2282,14 +2148,12 @@ class VanguardChessApp {
       return;
     }
 
-    // Build points array with safe calculations
     const points = evals.map((cp, idx) => {
       const x = (idx / Math.max(1, evals.length - 1)) * width;
       const clamped = Math.max(-maxCp, Math.min(maxCp, cp || 0));
       const norm = clamped / maxCp;
       const compressed = Math.sign(norm) * Math.pow(Math.abs(norm), 0.75);
       const y = midY + compressed * (midY - 3);
-      // Ensure y is a valid number
       return { 
         x: isNaN(x) ? 0 : parseFloat(x.toFixed(1)), 
         y: isNaN(y) ? midY : parseFloat(y.toFixed(1)), 
@@ -2321,7 +2185,6 @@ class VanguardChessApp {
       }).join('')}
     `;
 
-    // Click handler for points to scrub Deep Dive position
     svg.onclick = (evt) => {
       const pointEl = evt.target.closest('.eval-point');
       if (pointEl && pointEl.dataset.ply !== undefined) {
@@ -2332,8 +2195,8 @@ class VanguardChessApp {
       }
     };
   }
+}
 
-// Bootstrap application on DOM load
 window.addEventListener('DOMContentLoaded', () => {
   window.hikariApp = new VanguardChessApp();
 });
