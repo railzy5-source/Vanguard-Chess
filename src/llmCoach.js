@@ -6,51 +6,58 @@
 
 export class LLMCoach {
   constructor() {
-    this.apiType = 'gemini'; // 'gemini' | 'deepseek' | 'none'
+    this.apiType = 'gemini';
     this.apiKey = null;
     this.enabled = false;
     this.cache = new Map();
     this.cacheTTL = 24 * 60 * 60 * 1000; // 24 hours
     
-    // Try to load API key from localStorage or environment
+    // Try to load API key from multiple sources
     this.loadApiKey();
   }
 
   loadApiKey() {
+    // 1. Check Cloudflare environment (for Pages Functions or Workers)
+    if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
+      this.apiKey = process.env.GEMINI_API_KEY;
+      this.enabled = true;
+      console.log('✅ LLM Coach: Gemini API key loaded from Cloudflare environment');
+      return;
+    }
+
+    // 2. Check localStorage (for user-provided keys)
     try {
-      // Check localStorage first
       const saved = localStorage.getItem('hikari_llm_config');
       if (saved) {
         const config = JSON.parse(saved);
-        this.apiType = config.apiType || 'gemini';
-        this.apiKey = config.apiKey;
-        this.enabled = !!this.apiKey;
-        return;
+        if (config.apiKey) {
+          this.apiKey = config.apiKey;
+          this.apiType = config.apiType || 'gemini';
+          this.enabled = true;
+          console.log('✅ LLM Coach: Gemini API key loaded from localStorage');
+          return;
+        }
       }
     } catch (e) {
-      console.warn('Could not load LLM config:', e);
+      console.warn('Could not load LLM config from localStorage:', e);
     }
 
-    // Check for environment variable (Cloudflare)
-    if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
-      this.apiKey = process.env.GEMINI_API_KEY;
-      this.apiType = 'gemini';
-      this.enabled = true;
-    } else if (typeof process !== 'undefined' && process.env?.DEEPSEEK_API_KEY) {
-      this.apiKey = process.env.DEEPSEEK_API_KEY;
-      this.apiType = 'deepseek';
-      this.enabled = true;
-    }
+    // 3. Check for hardcoded fallback (for testing only - remove in production)
+    // Do NOT hardcode your API key here!
+    
+    console.log('ℹ️ LLM Coach: No API key found. Using heuristic fallback only.');
+    this.enabled = false;
   }
 
   /**
    * Store API key (called from settings UI)
    */
   setApiKey(apiType, apiKey) {
-    this.apiType = apiType;
+    this.apiType = apiType || 'gemini';
     this.apiKey = apiKey;
     this.enabled = true;
-    localStorage.setItem('hikari_llm_config', JSON.stringify({ apiType, apiKey }));
+    localStorage.setItem('hikari_llm_config', JSON.stringify({ apiType: this.apiType, apiKey }));
+    console.log('✅ LLM Coach: API key saved to localStorage');
   }
 
   /**
@@ -60,6 +67,7 @@ export class LLMCoach {
     this.apiKey = null;
     this.enabled = false;
     localStorage.removeItem('hikari_llm_config');
+    console.log('ℹ️ LLM Coach: API key cleared');
   }
 
   /**
@@ -81,8 +89,6 @@ export class LLMCoach {
 
       if (this.apiType === 'gemini') {
         response = await this.callGemini(prompt);
-      } else if (this.apiType === 'deepseek') {
-        response = await this.callDeepSeek(prompt);
       } else {
         return this.getFallbackExplanation(moveResult, game, facts);
       }
@@ -149,7 +155,7 @@ Response:
   }
 
   /**
-   * Call Gemini API (free tier via Google AI Studio)
+   * Call Gemini API using the secret key
    */
   async callGemini(prompt) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
@@ -180,42 +186,9 @@ Response:
   }
 
   /**
-   * Call DeepSeek API (free tier)
-   */
-  async callDeepSeek(prompt) {
-    const url = 'https://api.deepseek.com/v1/chat/completions';
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: 'You are Coach Naomi, a supportive, witty grandmaster chess coach.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 300
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`DeepSeek API error: ${response.status} - ${error}`);
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  }
-
-  /**
    * Parse the LLM response into structured format
    */
   parseResponse(response) {
-    // Split into paragraphs
     const paragraphs = response.split(/\n\s*\n/).filter(p => p.trim().length > 0);
     
     return {
@@ -237,7 +210,7 @@ Response:
 
     if (isBook && openingName) {
       return {
-        text: `Solid opening theory! Playing the ${openingName} — a principled, sound choice for steady development and control.`,
+        text: `📖 Solid opening theory! Playing the ${openingName} — a principled, sound choice for steady development.`,
         rationale: `This opening focuses on harmonious piece development, secure king safety, and establishing a strong pawn center.`,
         enemyPlan: `Your opponent will likely try to challenge your center with pawn breaks or trade off your active pieces.`,
         warning: `Watch for tactical threats on your back rank and keep your pieces well-coordinated.`
@@ -327,10 +300,16 @@ Response:
    */
   setCached(key, data) {
     this.cache.set(key, { data, timestamp: Date.now() });
-    // Keep cache size manageable
     if (this.cache.size > 100) {
       const firstKey = this.cache.keys().next().value;
       this.cache.delete(firstKey);
     }
+  }
+
+  /**
+   * Check if LLM is enabled and ready
+   */
+  isReady() {
+    return this.enabled && !!this.apiKey;
   }
 }
