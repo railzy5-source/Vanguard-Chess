@@ -1,6 +1,6 @@
 /**
- * Hikari Chess Coach - Main Application Orchestrator
- * Connects Chess logic, Stockfish Engine, Interactive Board, Coach Hikari, and LocalStorage.
+ * Vanguard Chess Coach - Main Application Orchestrator
+ * Connects Chess logic, Stockfish Engine, Interactive Board, Coach Naomi, and LocalStorage.
  */
 
 import { Chess } from 'chess.js';
@@ -9,10 +9,10 @@ import { ChessBoardUI } from './board.js';
 import { CoachNaomi } from './coach.js';
 import { Storage } from './storage.js';
 import { ChessClock } from './clock.js';
-import { PuzzleTrainer } from './puzzles.js';
 import { OPENINGS_DATABASE, OpeningExplorer } from './openingBook.js';
 import { MoveClassifier } from './classifier.js';
 import { FactsEngine } from './factsEngine.js';
+import { LLMCoach } from './llmCoach.js';
 
 function getPieceSvg(pieceKey, style = 'cburnett') {
   const symbols = {
@@ -34,6 +34,9 @@ class VanguardChessApp {
     this.engine = new ChessEngine();
     this.coach = new CoachNaomi();
     this.settings = Storage.getSettings();
+    
+    // Initialize LLM Coach (optional, falls back gracefully)
+    this.llmCoach = new LLMCoach();
 
     // Centralized Game State
     this.state = {
@@ -58,11 +61,6 @@ class VanguardChessApp {
       (state) => this.renderClockTick(state),
       (timeoutColor) => this.handleClockTimeout(timeoutColor)
     );
-
-    // Tactical Puzzle Trainer
-    this.puzzleGame = new Chess();
-    this.puzzleTrainer = new PuzzleTrainer((puzzle) => this.loadPuzzleUI(puzzle));
-    this.puzzleBoard = null;
 
     // Deep Dive & Opening Games
     this.deepDiveGame = new Chess();
@@ -145,14 +143,6 @@ class VanguardChessApp {
       interactive: false
     });
 
-    // Initialize Puzzle Board
-    this.puzzleBoard = new ChessBoardUI('puzzle-board-container', {
-      chessGame: this.puzzleGame,
-      orientation: 'white',
-      interactive: true,
-      onMove: (move) => this.handlePuzzleMove(move)
-    });
-
     // Initialize Opening Explorer Board
     this.openingGame = new Chess();
     this.openingBoard = new ChessBoardUI('opening-board-container', {
@@ -161,7 +151,6 @@ class VanguardChessApp {
       interactive: false,
       onMove: (move) => {
         if (this.openingIndex === -1 && this.freeExploreGame) {
-          // The board already executed the move on this.freeExploreGame
           this.renderOpeningExplorer();
         }
       }
@@ -180,7 +169,6 @@ class VanguardChessApp {
     this.updateOpeningDisplay();
     this.renderEvalGraph();
     this.initOpeningExplorerUI();
-    this.loadPuzzleUI(this.puzzleTrainer.getCurrentPuzzle());
 
     // If AI plays White, trigger AI move
     if (this.playerColor === 'black') {
@@ -188,6 +176,38 @@ class VanguardChessApp {
     } else {
       this.updateBestMoveArrows();
     }
+  }
+
+  /**
+   * Check if a move is in the opening book
+   * This prevents false "mistake" classifications for principled opening moves
+   */
+  isBookMove(moveSan) {
+    const sanHistory = this.moveHistory.map(m => m.san);
+    const testHistory = [...sanHistory, moveSan];
+    
+    for (const opening of OPENINGS_DATABASE) {
+      if (testHistory.length <= opening.moves.length) {
+        let match = true;
+        for (let i = 0; i < testHistory.length; i++) {
+          if (opening.moves[i] !== testHistory[i]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          return {
+            isBook: true,
+            openingName: opening.name,
+            openingId: opening.id,
+            keyIdeas: opening.keyIdeas || [],
+            nextMove: opening.moves[testHistory.length] || null
+          };
+        }
+      }
+    }
+    
+    return { isBook: false };
   }
 
   renderClockTick(state) {
@@ -228,7 +248,6 @@ class VanguardChessApp {
     if (this.gameBoard) this.gameBoard.setBoardTheme(themeName);
     if (this.mainLineBoard) this.mainLineBoard.setBoardTheme(themeName);
     if (this.branchBoard) this.branchBoard.setBoardTheme(themeName);
-    if (this.puzzleBoard) this.puzzleBoard.setBoardTheme(themeName);
     if (this.openingBoard) this.openingBoard.setBoardTheme(themeName);
 
     this.applyBgTheme(this.settings.bgTheme || 'auto');
@@ -257,7 +276,6 @@ class VanguardChessApp {
     document.body.style.backgroundColor = color;
     document.body.style.transition = 'background-color 0.4s ease';
 
-    // Detect if background is light mode or dark mode
     const lightBgs = ['#f8f9fa', '#f5f2eb', '#ebefe9', '#e8eff5', '#faf6f0'];
     const isLight = lightBgs.includes(color.toLowerCase());
     if (isLight) {
@@ -276,7 +294,6 @@ class VanguardChessApp {
     if (this.gameBoard) this.gameBoard.setPieceStyle(styleName);
     if (this.mainLineBoard) this.mainLineBoard.setPieceStyle(styleName);
     if (this.branchBoard) this.branchBoard.setPieceStyle(styleName);
-    if (this.puzzleBoard) this.puzzleBoard.setPieceStyle(styleName);
     if (this.openingBoard) this.openingBoard.setPieceStyle(styleName);
   }
 
@@ -366,7 +383,6 @@ class VanguardChessApp {
 
     // Keyboard Arrow navigation for Deep Dive
     document.addEventListener('keydown', (e) => {
-      // Don't trigger if user is typing in an input/textarea
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
 
       if (this.currentTab === 'deepdive') {
@@ -391,53 +407,11 @@ class VanguardChessApp {
       this.clock.setTimeControl(e.target.value);
     });
 
-    // Puzzle Action Buttons
-    document.getElementById('btn-puzzle-hint')?.addEventListener('click', () => {
-      const p = this.puzzleTrainer.getCurrentPuzzle();
-      const hintText = document.getElementById('puzzle-hint-text');
-      if (hintText) hintText.textContent = p.hint;
-      this.coach.speak(`Tactical Hint: ${p.hint}`, 'tactical');
-    });
-
-    document.getElementById('btn-puzzle-reset')?.addEventListener('click', () => {
-      this.resetCurrentPuzzle();
-    });
-
-    document.getElementById('btn-puzzle-solution')?.addEventListener('click', () => {
-      this.revealPuzzleSolution();
-    });
-
-    document.getElementById('btn-puzzle-next')?.addEventListener('click', () => {
-      this.puzzleTrainer.nextPuzzle();
-    });
-
-    document.getElementById('btn-fetch-lichess-puzzle')?.addEventListener('click', async () => {
-      const btn = document.getElementById('btn-fetch-lichess-puzzle');
-      const originalText = btn ? btn.textContent : 'Lichess Daily';
-      if (btn) {
-        btn.textContent = 'Connecting... ♟️';
-        btn.disabled = true;
-      }
-      this.coach.speak("Connecting to Lichess server to fetch the global Daily Tactical Puzzle... 🌐", "tactical");
-      const res = await this.puzzleTrainer.fetchLichessDailyPuzzle();
-      if (res.success) {
-        this.loadPuzzleUI(this.puzzleTrainer.getCurrentPuzzle());
-        this.coach.speak("Lichess Daily Puzzle loaded successfully! Play your move on the puzzle board when ready.", "happy");
-      } else {
-        this.coach.speak("Lichess puzzle service is currently offline or rate-limited. Play some other tactical exercises!", "surprised");
-      }
-      if (btn) {
-        btn.textContent = originalText;
-        btn.disabled = false;
-      }
-    });
-
     // Opening Explorer Sub-Tab Switching
     document.querySelectorAll('.opening-subtab-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const targetTab = e.currentTarget.dataset.subtab;
         
-        // Update button states
         document.querySelectorAll('.opening-subtab-btn').forEach(b => {
           if (b.dataset.subtab === targetTab) {
             b.className = 'opening-subtab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-blue-600 text-white shadow';
@@ -446,7 +420,6 @@ class VanguardChessApp {
           }
         });
 
-        // Show target panel
         document.querySelectorAll('.opening-subtab-panel').forEach(panel => {
           if (panel.id === `opening-subtab-panel-${targetTab}`) {
             panel.classList.remove('hidden');
@@ -540,16 +513,12 @@ class VanguardChessApp {
       if (this.openingGame) {
         const fen = this.openingGame.fen();
         this.game = new Chess(fen);
-        this.board.setChessGame(this.game);
-        this.board.setOrientation(op.side === 'black' ? 'black' : 'white');
+        this.gameBoard.setChessGame(this.game);
+        this.gameBoard.setOrientation(op.side === 'black' ? 'black' : 'white');
         this.moveHistory = [];
-        this.moveTimestamps = [];
-        this.isGameActive = true;
-        this.gameResult = null;
-        
-        // Switch to Game Tab
-        const gameTabBtn = document.querySelector('.nav-tab-btn[data-tab="game"]');
-        if (gameTabBtn) gameTabBtn.click();
+        this.gameActive = true;
+
+        this.switchTab('play');
 
         this.coach.speak(`⚔️ Practice position loaded for ${op.name}! Make your move against Coach Naomi!`, 'flirty');
       }
@@ -652,9 +621,6 @@ class VanguardChessApp {
       if (activeContent) activeContent.classList.add('active');
       this.initDeepDive();
       this.coach.reactToDeepDive();
-    } else if (tabId === 'puzzles') {
-      this.loadPuzzleUI(this.puzzleTrainer.getCurrentPuzzle());
-      this.coach.speak('Tactical Puzzle Trainer active! Solve these positions to sharpen your vision! 🧩', 'tactical');
     } else if (tabId === 'review') {
       this.renderEvalGraph();
       this.coach.speak('Here is your full game review and advantage graph! 📊', 'happy');
@@ -687,25 +653,17 @@ class VanguardChessApp {
     let playedScore = 0;
     let scoreFromWhite = 0;
 
-    // Check if book move first
+    // Check if this is a book move FIRST — this prevents false "mistake" flags
+    const sanHistory = this.moveHistory.map(m => m.san);
+    const bookCheck = this.isBookMove(move.san);
     let isBookMove = false;
     let matchedOpeningName = '';
-    const sanHistory = this.moveHistory.map(m => m.san).concat([move.san]);
-    for (const op of OPENINGS_DATABASE) {
-      if (sanHistory.length <= op.moves.length) {
-        let match = true;
-        for (let i = 0; i < sanHistory.length; i++) {
-          if (op.moves[i] !== sanHistory[i]) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          isBookMove = true;
-          matchedOpeningName = op.name;
-          break;
-        }
-      }
+    let openingKeyIdeas = [];
+
+    if (bookCheck.isBook) {
+      isBookMove = true;
+      matchedOpeningName = bookCheck.openingName;
+      openingKeyIdeas = bookCheck.keyIdeas || [];
     }
 
     try {
@@ -720,14 +678,15 @@ class VanguardChessApp {
         scoreFromWhite = move.color === 'w' ? playedScore : -playedScore;
         const diff = Math.max(0, topScore - playedScore);
 
-        // Objective Centipawn Loss Classification
+        // Use MoveClassifier with book override
         const result = MoveClassifier.classifyMove({
           playedUci: uci,
           bestUci: bestUci,
           evalBefore: topScore,
           evalAfter: playedScore,
           isSacrifice: move.captured !== undefined && move.piece !== 'p' && move.captured !== 'p',
-          isBook: isBookMove
+          isBook: isBookMove,
+          openingName: matchedOpeningName
         });
 
         classification = result.classification;
@@ -740,9 +699,13 @@ class VanguardChessApp {
       console.error('Error classifying player move:', err);
     }
 
+    // If it's a book move, override classification
     if (isBookMove) {
       classification = 'Book';
     }
+
+    // Get facts for the coach
+    const facts = FactsEngine.analyze(this.game);
 
     this.moveHistory.push({
       fen: this.game.fen(),
@@ -754,12 +717,15 @@ class VanguardChessApp {
       classification: classification,
       bestMoveSan: bestMoveSan,
       score: playedScore,
-      scoreFromWhite: scoreFromWhite
+      scoreFromWhite: scoreFromWhite,
+      isBook: isBookMove,
+      openingName: matchedOpeningName,
+      facts: facts
     });
 
     this.currentPlyIndex = this.moveHistory.length;
     this.updateMoveTable();
-    this.updateMatchMetrics(); // Accuracies already computed
+    this.updateMatchMetrics();
     this.updateCapturedPieces();
     this.updateTimelineProgress();
     this.updateOpeningDisplay();
@@ -771,8 +737,8 @@ class VanguardChessApp {
       return;
     }
 
-    // Coach reaction
-    this.coach.reactToMove({
+    // Coach reaction with LLM support
+    const moveResult = {
       san: move.san,
       piece: move.piece,
       isCheck: this.game.inCheck(),
@@ -781,16 +747,19 @@ class VanguardChessApp {
       isPlayer: true,
       classification: classification,
       bestMoveSan: bestMoveSan,
-      openingName: classification === 'Book' ? matchedOpeningName : undefined,
-      game: this.game
-    });
+      openingName: matchedOpeningName,
+      isBook: isBookMove,
+      game: this.game,
+      facts: facts
+    };
+
+    await this.coach.reactToMove(moveResult);
 
     // AI Turn
     const isAiTurn = (this.playerColor === 'white' && this.game.turn() === 'b') ||
                      (this.playerColor === 'black' && this.game.turn() === 'w');
 
     if (isAiTurn) {
-      // 1.8 second delay so player has time to listen to Naomi explain their move first!
       setTimeout(() => this.triggerAiMove(), 1800);
     } else if (this.settings.showArrows) {
       this.updateBestMoveArrows();
@@ -832,7 +801,6 @@ class VanguardChessApp {
 
         const moveRes = this.game.move({ from, to, promotion });
         if (moveRes) {
-          // ✅ USE MULTIPV DATA FROM getBestMove, don't re-analyze!
           let aiClassification = 'Good';
           let aiScore = 0;
           let bestAiMoveSan = '';
@@ -845,7 +813,6 @@ class VanguardChessApp {
             aiScore = playedAiMove ? playedAiMove.score : (bestAiMove.score - 150);
             const topScore = bestAiMove.score;
 
-            // Objective Centipawn Loss Classification (No ELO Scaling)
             const classRes = MoveClassifier.classifyMove({
               playedUci: bestMoveUci,
               bestUci: bestAiMove.moveUci,
@@ -860,6 +827,9 @@ class VanguardChessApp {
           
           const scoreFromWhite = moveRes.color === 'w' ? aiScore : -aiScore;
 
+          // Get facts for opponent move
+          const facts = FactsEngine.analyze(this.game);
+
           this.moveHistory.push({
             fen: this.game.fen(),
             san: moveRes.san,
@@ -870,7 +840,9 @@ class VanguardChessApp {
             score: aiScore,
             scoreFromWhite: scoreFromWhite,
             classification: aiClassification,
-            bestMoveSan: bestAiMoveSan
+            bestMoveSan: bestAiMoveSan,
+            isBook: false,
+            facts: facts
           });
 
           this.currentPlyIndex = this.moveHistory.length;
@@ -883,7 +855,7 @@ class VanguardChessApp {
           this.updateOpeningDisplay();
           this.clock.switchTurn();
 
-          this.coach.reactToMove({
+          const moveResult = {
             san: moveRes.san,
             piece: moveRes.piece,
             isCheck: this.game.inCheck(),
@@ -891,8 +863,11 @@ class VanguardChessApp {
             isCapture: moveRes.captured !== undefined,
             isPlayer: false,
             classification: aiClassification,
-            game: this.game
-          });
+            game: this.game,
+            facts: facts
+          };
+
+          await this.coach.reactToMove(moveResult);
 
           if (this.checkGameOver()) {
             this.clock.stopTimer();
@@ -1035,7 +1010,6 @@ class VanguardChessApp {
       this.gameBoard.setLastMove(null, null);
     }
 
-    // Interactive only if we are at the latest live ply and game is active
     const isAtCurrent = plyIndex === this.moveHistory.length;
     this.gameBoard.setInteractive(isAtCurrent && this.gameActive);
 
@@ -1050,7 +1024,6 @@ class VanguardChessApp {
   handleUndo() {
     if (this.moveHistory.length === 0) return;
 
-    // Undo player move + computer move if applicable
     const isPlayerTurn = (this.playerColor === 'white' && this.game.turn() === 'w') ||
                          (this.playerColor === 'black' && this.game.turn() === 'b');
 
@@ -1109,7 +1082,6 @@ class VanguardChessApp {
     this.playerAccuracyScores = [];
     this.gameActive = true;
     this.isAiThinking = false;
-    this.lichessExplorerUnavailable = false; // BUG FIX: allow live opening lookups to retry on a fresh game
     this.clock.reset();
 
     this.resolvePlayerColor();
@@ -1182,17 +1154,11 @@ class VanguardChessApp {
       this.mainLineBoard.setLastMove(null, null);
     }
 
-    // Update ply counter UI
     const counter = document.getElementById('dd-ply-counter');
     if (counter) counter.textContent = `Move ${plyIndex} / ${this.moveHistory.length}`;
 
-    // Calculate Branch candidate moves for Main Line position
     this.loadBranchCandidates();
-
-    // Re-render Advantage Graph to update active move indicator
     this.renderEvalGraph();
-
-    // Update Coach Naomi Detailed Move Breakdown & Game Review
     this.updateDeepDiveCoachReview(plyIndex);
   }
 
@@ -1262,7 +1228,6 @@ class VanguardChessApp {
 
     container.innerHTML = `
       <div class="flex flex-col gap-3">
-        <!-- Move Summary Card -->
         <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="text-xs font-mono font-bold text-blue-400">Move ${moveNum} (${isWhite ? 'White' : 'Black'})</span>
@@ -1274,7 +1239,6 @@ class VanguardChessApp {
           </div>
         </div>
 
-        <!-- Coach Naomi Detailed Breakdown Card -->
         <div class="bg-[#0d0d0f] p-3 rounded-lg border border-[#2a2a2e] flex flex-col gap-2.5">
           <div class="flex items-center gap-1.5 border-b border-[#2a2a2e] pb-2">
             <span class="text-sm">👑</span>
@@ -1292,7 +1256,6 @@ class VanguardChessApp {
         </div>
       </div>
 
-      <!-- Full Game Move List Breakdown Selector -->
       <div class="border-t border-[#2a2a2e] pt-2.5 mt-1">
         <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">Jump to Move Breakdown:</span>
         <div class="flex flex-wrap gap-1 max-h-[100px] overflow-y-auto pr-1" id="dd-all-moves-nav">
@@ -1312,6 +1275,25 @@ class VanguardChessApp {
         </div>
       </div>
     `;
+  }
+
+  getClassificationBadge(classification) {
+    if (!classification) return '';
+    const config = {
+      'Brilliant': { text: 'Brilliant', style: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
+      'Great': { text: 'Great', style: 'bg-blue-500/25 text-blue-300 border-blue-500/30' },
+      'Best Move': { text: 'Best', style: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+      'Book': { text: 'Book', style: 'bg-amber-600/20 text-amber-300 border-amber-600/30' },
+      'Excellent': { text: 'Excellent', style: 'bg-teal-500/20 text-teal-300 border-teal-500/30' },
+      'Good': { text: 'Good', style: 'bg-zinc-700/40 text-zinc-300 border-zinc-700/50' },
+      'Inaccuracy': { text: 'Inaccuracy', style: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' },
+      'Mistake': { text: 'Mistake', style: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
+      'Blunder': { text: 'Blunder', style: 'bg-red-500/15 text-red-400 border-red-500/30' }
+    };
+
+    const cfg = config[classification];
+    if (!cfg) return '';
+    return `<span class="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border ${cfg.style} font-sans ml-1 font-semibold">${cfg.text}</span>`;
   }
 
   /**
@@ -1335,7 +1317,6 @@ class VanguardChessApp {
 
     const bestScore = candidateMoves[0]?.score ?? 0;
 
-    // Best-move arrows on Main Line board
     const arrows = candidateMoves.map((cand) => {
       if (!cand.moveUci) return null;
       const diff = Math.max(0, bestScore - (cand.score ?? 0));
@@ -1355,7 +1336,6 @@ class VanguardChessApp {
 
     this.mainLineBoard.setArrows(arrows);
 
-    // Render candidate list items
     const tempChess = new Chess(currentFen);
     candidateMoves.forEach((cand, idx) => {
       let sanMove = cand.san;
@@ -1367,9 +1347,7 @@ class VanguardChessApp {
           const testGame = new Chess(currentFen);
           const m = testGame.move({ from, to, promotion });
           if (m) sanMove = m.san;
-        } catch (err) {
-          // fallback
-        }
+        } catch (err) {}
       }
       if (!sanMove) sanMove = cand.moveUci;
 
@@ -1445,7 +1423,6 @@ class VanguardChessApp {
       branchContainer.appendChild(div);
     });
 
-    // Auto-select top candidate by default
     if (candidateMoves[0]) {
       this.selectedBranchMove = candidateMoves[0].moveUci;
       this.generateBranchContinuation(candidateMoves[0].moveUci);
@@ -1482,13 +1459,11 @@ class VanguardChessApp {
     const to = plyItem.moveUci.substring(2, 4);
     this.branchBoard.setLastMove(from, to);
 
-    // Update Branch Ply Label
     const plyLabel = document.getElementById('branch-ply-label');
     if (plyLabel) {
       plyLabel.textContent = `Ply ${plyIndex + 1} / ${this.continuationLine.length} (${plyItem.moveSan})`;
     }
 
-    // Refresh the variation moves timeline
     this.renderContinuationTimeline();
   }
 
@@ -1510,7 +1485,6 @@ class VanguardChessApp {
       const button = document.createElement('button');
       const isActive = idx === this.branchPlyIndex;
 
-      // Label beautifully as e.g. "1. e4" for white, or "e5" for black
       const isWhite = ply.color === 'w';
       const moveNum = Math.floor(idx / 2) + 1;
       const moveLabel = isWhite ? `${moveNum}. ${ply.moveSan}` : `${ply.moveSan}`;
@@ -1603,27 +1577,6 @@ class VanguardChessApp {
     });
   }
 
-
-
-  getClassificationBadge(classification) {
-    if (!classification) return '';
-    const config = {
-      'Brilliant': { text: 'Brilliant', style: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-      'Great': { text: 'Great', style: 'bg-blue-500/25 text-blue-300 border-blue-500/30' },
-      'Best Move': { text: 'Best', style: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-      'Book': { text: 'Book', style: 'bg-amber-600/20 text-amber-300 border-amber-600/30' },
-      'Excellent': { text: 'Excellent', style: 'bg-teal-500/20 text-teal-300 border-teal-500/30' },
-      'Good': { text: 'Good', style: 'bg-zinc-700/40 text-zinc-300 border-zinc-700/50' },
-      'Inaccuracy': { text: 'Inaccuracy', style: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' },
-      'Mistake': { text: 'Mistake', style: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
-      'Blunder': { text: 'Blunder', style: 'bg-red-500/15 text-red-400 border-red-500/30' }
-    };
-
-    const cfg = config[classification];
-    if (!cfg) return '';
-    return `<span class="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border ${cfg.style} font-sans ml-1 font-semibold">${cfg.text}</span>`;
-  }
-
   /**
    * Update Move History Table on Game Tab
    */
@@ -1690,12 +1643,7 @@ class VanguardChessApp {
   async updateMatchMetrics(playerPlayedMove = null) {
     const fen = this.game.fen();
 
-    // BUG FIX: On checkmate there are no legal moves, so analyzePosition() correctly
-    // returns an empty array - but that was silently falling through to the neutral
-    // 0.00 eval / 50% win prob defaults below, even though the position is fully decisive.
-    // Handle checkmate explicitly so the panel reflects the actual result.
     if (this.game.isCheckmate()) {
-      // The side whose turn it is right now is the side that just got checkmated (lost).
       const loserIsWhite = this.game.turn() === 'w';
       const whiteWinProbMate = loserIsWhite ? 0 : 100;
       const mateEvalStr = loserIsWhite ? '-#0' : '+#0';
@@ -1727,7 +1675,6 @@ class VanguardChessApp {
       return;
     }
 
-    // Get candidate evaluations from engine
     const candidateMoves = await this.engine.analyzePosition(fen, 3);
     let topScore = 0;
     let evalStr = '0.00';
@@ -1736,7 +1683,6 @@ class VanguardChessApp {
       topScore = candidateMoves[0].score || 0;
       evalStr = candidateMoves[0].evalStr || '0.00';
 
-      // Evaluate accuracy for player move
       if (playerPlayedMove) {
         const bestUci = candidateMoves[0].moveUci;
         const playerUci = playerPlayedMove.from + playerPlayedMove.to + (playerPlayedMove.promotion || '');
@@ -1749,7 +1695,6 @@ class VanguardChessApp {
       }
     }
 
-    // Convert score (from White's perspective) to Win Probability
     const turnMultiplier = this.game.turn() === 'w' ? 1 : -1;
     const scoreFromWhite = topScore * turnMultiplier;
 
@@ -1764,7 +1709,6 @@ class VanguardChessApp {
     if (winProbVal) winProbVal.textContent = `${displayWinProb}%`;
     if (winProbBar) winProbBar.style.width = `${displayWinProb}%`;
 
-    // Engine Eval Card
     const evalScoreText = document.getElementById('eval-score-text');
     const evalBarWhite = document.getElementById('eval-bar-white');
     const evalBarBlack = document.getElementById('eval-bar-black');
@@ -1775,7 +1719,6 @@ class VanguardChessApp {
       evalBarBlack.style.width = `${100 - whiteWinProb}%`;
     }
 
-    // Best Move Accuracy Badge
     const bestAccVal = document.getElementById('best-acc-val');
     if (bestAccVal) {
       if (this.playerAccuracyScores.length > 0) {
@@ -1811,11 +1754,6 @@ class VanguardChessApp {
       }
     }
 
-    const pieceIcons = {
-      p: '♟', n: '♞', b: '♝', r: '♜', q: '♛'
-    };
-
-    // White pieces captured by Black
     let capturedWhiteHtml = '';
     Object.keys(initialCounts).forEach(type => {
       const missing = initialCounts[type] - currentCounts['w'][type];
@@ -1825,7 +1763,6 @@ class VanguardChessApp {
       }
     });
 
-    // Black pieces captured by White
     let capturedBlackHtml = '';
     Object.keys(initialCounts).forEach(type => {
       const missing = initialCounts[type] - currentCounts['b'][type];
@@ -1856,9 +1793,6 @@ class VanguardChessApp {
   }
 
   /**
-   * Update Opening Book Header & Candidates
-   */
-  /**
    * Opening Book Explorer UI Handling
    */
   initOpeningExplorerUI() {
@@ -1870,7 +1804,6 @@ class VanguardChessApp {
       });
     }
     
-    // Add event listener for dropdown selection
     const select = document.getElementById('opening-select-dropdown');
     if (select) {
       select.addEventListener('change', (e) => {
@@ -1930,7 +1863,6 @@ class VanguardChessApp {
 
     select.innerHTML = optionsHtml;
     
-    // Ensure currently selected opening matches filter
     const currentOp = OPENINGS_DATABASE[this.openingIndex];
     if (currentOp && currentOp.side === selectedSide) {
       select.value = currentOp.id;
@@ -1967,7 +1899,6 @@ class VanguardChessApp {
 
     const op = OPENINGS_DATABASE[this.openingIndex] || OPENINGS_DATABASE[0];
 
-    // Mastered button status
     const masteredBtn = document.getElementById('opening-btn-mastered');
     const masteredLabel = document.getElementById('opening-mastered-label');
     const masteredStar = document.getElementById('opening-mastered-star');
@@ -2059,7 +1990,6 @@ class VanguardChessApp {
       }
       this.openingBoard.renderBoard();
 
-      // Show next main line candidate move arrow on board if available
       if (this.openingPly < op.moves.length) {
         try {
           const nextSan = op.moves[this.openingPly];
@@ -2238,140 +2168,15 @@ class VanguardChessApp {
   }
 
   /**
-   * Tactical Puzzle UI Handling
-   */
-  loadPuzzleUI(puzzle) {
-    if (!puzzle) return;
-    this.puzzleGame = new Chess(puzzle.fen);
-    this.puzzleTrainer.resetProgress();
-
-    if (this.puzzleBoard) {
-      this.puzzleBoard.setChessGame(this.puzzleGame);
-      this.puzzleBoard.setOrientation(puzzle.playerColor || 'white');
-      this.puzzleBoard.setInteractive(true);
-    }
-
-    const themeBadge = document.getElementById('puzzle-theme-badge');
-    const diffLabel = document.getElementById('puzzle-difficulty-label');
-    const titleLabel = document.getElementById('puzzle-title-label');
-    const descLabel = document.getElementById('puzzle-desc-label');
-    const hintText = document.getElementById('puzzle-hint-text');
-    const feedbackBanner = document.getElementById('puzzle-feedback-banner');
-    const expBox = document.getElementById('puzzle-explanation-box');
-
-    if (expBox) expBox.classList.add('hidden');
-    if (themeBadge) themeBadge.textContent = puzzle.theme;
-    if (diffLabel) diffLabel.textContent = `Rating: ${puzzle.rating}`;
-    if (titleLabel) titleLabel.textContent = puzzle.title;
-    if (descLabel) descLabel.textContent = puzzle.description;
-    if (hintText) hintText.textContent = 'Tap "Coach Hint" when you need tactical guidance.';
-    if (feedbackBanner) {
-      feedbackBanner.textContent = `${puzzle.playerColor === 'white' ? 'White' : 'Black'} to play. Find the best tactical move!`;
-      feedbackBanner.className = 'w-full p-3 rounded-xl bg-[#16161a] border border-[#2a2a2e] text-xs text-center font-bold text-zinc-300';
-    }
-
-    this.updatePuzzleStats();
-  }
-
-  handlePuzzleMove(move) {
-    const res = this.puzzleTrainer.checkMove(move.san, move.from + move.to);
-    const feedbackBanner = document.getElementById('puzzle-feedback-banner');
-    const expBox = document.getElementById('puzzle-explanation-box');
-    const expText = document.getElementById('puzzle-explanation-text');
-
-    if (res.status === 'solved') {
-      if (feedbackBanner) {
-        feedbackBanner.textContent = res.message;
-        feedbackBanner.className = 'w-full p-3 rounded-xl bg-emerald-950/90 border border-emerald-500 text-xs text-center font-extrabold text-emerald-300 animate-bounce';
-      }
-      if (expBox && expText) {
-        expText.textContent = res.explanation;
-        expBox.classList.remove('hidden');
-      }
-      this.coach.speak(`Outstanding tactical calculation! ${res.explanation}`, 'happy');
-      this.updatePuzzleStats();
-      this.puzzleBoard.setInteractive(false);
-    } else if (res.status === 'correct_step') {
-      if (feedbackBanner) {
-        feedbackBanner.textContent = res.message;
-        feedbackBanner.className = 'w-full p-3 rounded-xl bg-blue-950/80 border border-blue-500 text-xs text-center font-extrabold text-blue-300';
-      }
-      if (res.opponentMove) {
-        setTimeout(() => {
-          this.puzzleGame.move(res.opponentMove);
-          this.puzzleBoard.render();
-        }, 400);
-      }
-    } else {
-      // Wrong move
-      if (feedbackBanner) {
-        feedbackBanner.textContent = res.message;
-        feedbackBanner.className = 'w-full p-3 rounded-xl bg-red-950/90 border border-red-500 text-xs text-center font-extrabold text-red-300';
-      }
-      this.coach.speak(`That's not the best move! ${res.hint}`, 'surprised');
-      // Undo user move after 600ms so user can try again
-      setTimeout(() => {
-        this.puzzleGame.undo();
-        this.puzzleBoard.render();
-      }, 600);
-      this.updatePuzzleStats();
-    }
-  }
-
-  resetCurrentPuzzle() {
-    const puzzle = this.puzzleTrainer.getCurrentPuzzle();
-    this.puzzleGame = new Chess(puzzle.fen);
-    this.puzzleTrainer.resetProgress();
-    if (this.puzzleBoard) {
-      this.puzzleBoard.setChessGame(this.puzzleGame);
-      this.puzzleBoard.setInteractive(true);
-    }
-    const feedbackBanner = document.getElementById('puzzle-feedback-banner');
-    const expBox = document.getElementById('puzzle-explanation-box');
-    if (expBox) expBox.classList.add('hidden');
-    if (feedbackBanner) {
-      feedbackBanner.textContent = 'Position reset. Find the best move!';
-      feedbackBanner.className = 'w-full p-3 rounded-xl bg-[#16161a] border border-[#2a2a2e] text-xs text-center font-bold text-zinc-300';
-    }
-  }
-
-  revealPuzzleSolution() {
-    const puzzle = this.puzzleTrainer.getCurrentPuzzle();
-    const expBox = document.getElementById('puzzle-explanation-box');
-    const expText = document.getElementById('puzzle-explanation-text');
-    const feedbackBanner = document.getElementById('puzzle-feedback-banner');
-
-    if (expBox && expText) {
-      expText.innerHTML = `<strong>Solution line:</strong> ${puzzle.solution.join(' ')}<br><br>${puzzle.whyItWorks}`;
-      expBox.classList.remove('hidden');
-    }
-
-    if (feedbackBanner) {
-      feedbackBanner.textContent = `Solution revealed: ${puzzle.solution.join(' ')}`;
-      feedbackBanner.className = 'w-full p-3 rounded-xl bg-purple-950/80 border border-purple-500 text-xs text-center font-bold text-purple-300';
-    }
-
-    this.coach.speak(`Here is the winning solution: ${puzzle.solution.join(' ')}. ${puzzle.whyItWorks}`, 'tactical');
-  }
-
-  updatePuzzleStats() {
-    const streakLabel = document.getElementById('puzzle-streak-label');
-    const ratingLabel = document.getElementById('puzzle-rating-label');
-    if (streakLabel) streakLabel.textContent = `🔥 ${this.puzzleTrainer.getStreak()}`;
-    if (ratingLabel) ratingLabel.textContent = this.puzzleTrainer.getRating();
-  }
-
-  /**
    * Render Centipawn Evaluation SVG Line Graph & Classification Badges Summary
    */
   renderEvalGraph() {
     const svg = document.getElementById('eval-graph-svg');
     if (!svg) return;
 
-    // Reset move counts
     this.moveClassCounts = { brilliant: 0, great: 0, best: 0, excellent: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
 
-    const evals = [0]; // Starting position evaluation = 0
+    const evals = [0];
     let lastCp = 0;
 
     this.moveHistory.forEach((m, idx) => {
@@ -2379,7 +2184,6 @@ class VanguardChessApp {
       if (m.scoreFromWhite !== undefined && m.scoreFromWhite !== null) {
         cp = m.scoreFromWhite;
       } else {
-        // Fallback smooth deterministic evaluation pattern if history doesn't contain a score
         const wave = (Math.sin(idx * 0.8) * 50) + ((idx % 3 === 0) ? 40 : -20);
         cp = lastCp + Math.round(wave);
         cp = Math.max(-1000, Math.min(1000, cp));
@@ -2387,7 +2191,6 @@ class VanguardChessApp {
       lastCp = cp;
       evals.push(cp);
 
-      // Classify move quality based on actual stored classification
       if (m.classification) {
         const cls = m.classification.toLowerCase();
         if (cls === 'brilliant') this.moveClassCounts.brilliant++;
@@ -2398,12 +2201,10 @@ class VanguardChessApp {
         else if (cls === 'mistake') this.moveClassCounts.mistake++;
         else if (cls === 'blunder') this.moveClassCounts.blunder++;
       } else {
-        // Fallback default categorization if classification is missing
         this.moveClassCounts.best++;
       }
     });
 
-    // Update count labels
     const setEl = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
@@ -2417,7 +2218,6 @@ class VanguardChessApp {
     setEl('count-mistake', this.moveClassCounts.mistake);
     setEl('count-blunder', this.moveClassCounts.blunder);
 
-    // SVG Polyline Path Generation
     const width = 600;
     const height = 40;
     const midY = height / 2;
@@ -2425,10 +2225,7 @@ class VanguardChessApp {
 
     const points = evals.map((cp, idx) => {
       const x = (idx / Math.max(1, evals.length - 1)) * width;
-      // White advantage (+cp) -> below midY (y > midY)
-      // Black advantage (-cp) -> above midY (y < midY)
       const clamped = Math.max(-maxCp, Math.min(maxCp, cp));
-      // Using a compressed scale (signed square root or gentle scaling) so standard evals don't stretch too much
       const norm = clamped / maxCp;
       const compressed = Math.sign(norm) * Math.pow(Math.abs(norm), 0.75);
       const y = midY + compressed * (midY - 3);
@@ -2458,7 +2255,6 @@ class VanguardChessApp {
       }).join('')}
     `;
 
-    // Click handler for points to scrub Deep Dive position
     svg.onclick = (evt) => {
       const pointEl = evt.target.closest('.eval-point');
       if (pointEl && pointEl.dataset.ply !== undefined) {
