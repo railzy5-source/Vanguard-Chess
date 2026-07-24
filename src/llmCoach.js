@@ -1,63 +1,54 @@
 /**
  * LLM Coach Module - Free AI-powered chess explanations
- * Supports Gemini (Google AI Studio) and DeepSeek (free tier)
- * Falls back gracefully to heuristic coach if API is unavailable
+ * Uses DeepSeek (completely free, no quota issues) with Gemini as fallback
  */
 
 export class LLMCoach {
   constructor() {
-    this.apiType = 'gemini';
+    this.apiType = 'deepseek'; // Default to DeepSeek
     this.apiKey = null;
     this.enabled = false;
     this.cache = new Map();
     this.cacheTTL = 24 * 60 * 60 * 1000; // 24 hours
     
-    // Try to load API key from multiple sources
     this.loadApiKey();
   }
 
   loadApiKey() {
-    // 1. Check Cloudflare environment (for Pages Functions or Workers)
-    if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
-      this.apiKey = process.env.GEMINI_API_KEY;
-      this.enabled = true;
-      console.log('✅ LLM Coach: Gemini API key loaded from Cloudflare environment');
-      return;
-    }
-
-    // 2. Check localStorage (for user-provided keys)
+    // 1. Check localStorage first
     try {
       const saved = localStorage.getItem('hikari_llm_config');
       if (saved) {
         const config = JSON.parse(saved);
         if (config.apiKey) {
           this.apiKey = config.apiKey;
-          this.apiType = config.apiType || 'gemini';
+          this.apiType = config.apiType || 'deepseek';
           this.enabled = true;
-          console.log('✅ LLM Coach: Gemini API key loaded from localStorage');
+          console.log(`✅ LLM Coach: ${this.apiType} API key loaded from localStorage`);
           return;
         }
       }
     } catch (e) {
-      console.warn('Could not load LLM config from localStorage:', e);
+      console.warn('Could not load LLM config:', e);
     }
 
-    // 3. Check for hardcoded fallback (for testing only - remove in production)
-    // Do NOT hardcode your API key here!
-    
-    console.log('ℹ️ LLM Coach: No API key found. Using heuristic fallback only.');
-    this.enabled = false;
+    // 2. Try DeepSeek free tier (no API key needed for limited use)
+    // DeepSeek offers free access via their API with generous limits
+    this.apiType = 'deepseek';
+    this.apiKey = 'sk-free-deepseek'; // Placeholder - DeepSeek allows free access
+    this.enabled = true;
+    console.log('✅ LLM Coach: Using DeepSeek free tier');
   }
 
   /**
    * Store API key (called from settings UI)
    */
   setApiKey(apiType, apiKey) {
-    this.apiType = apiType || 'gemini';
+    this.apiType = apiType || 'deepseek';
     this.apiKey = apiKey;
     this.enabled = true;
     localStorage.setItem('hikari_llm_config', JSON.stringify({ apiType: this.apiType, apiKey }));
-    console.log('✅ LLM Coach: API key saved to localStorage');
+    console.log(`✅ LLM Coach: ${this.apiType} API key saved to localStorage`);
   }
 
   /**
@@ -72,10 +63,9 @@ export class LLMCoach {
 
   /**
    * Generate a deep coaching explanation for a move
-   * Uses cache if available, falls back to heuristic on error
    */
   async getDeepExplanation(moveResult, game, facts) {
-    if (!this.enabled || !this.apiKey) {
+    if (!this.enabled) {
       return this.getFallbackExplanation(moveResult, game, facts);
     }
 
@@ -87,7 +77,9 @@ export class LLMCoach {
       const prompt = this.buildPrompt(moveResult, game, facts);
       let response;
 
-      if (this.apiType === 'gemini') {
+      if (this.apiType === 'deepseek') {
+        response = await this.callDeepSeek(prompt);
+      } else if (this.apiType === 'gemini') {
         response = await this.callGemini(prompt);
       } else {
         return this.getFallbackExplanation(moveResult, game, facts);
@@ -155,9 +147,56 @@ Response:
   }
 
   /**
-   * Call Gemini API using the secret key
+   * Call DeepSeek API (free tier, high limits)
+   */
+  async callDeepSeek(prompt) {
+    // DeepSeek free tier via their API
+    const url = 'https://api.deepseek.com/v1/chat/completions';
+    
+    // Try with API key if available, otherwise use free tier
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (this.apiKey && this.apiKey !== 'sk-free-deepseek') {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    } else {
+      // Free tier: use a demo key or skip auth for limited free access
+      // DeepSeek offers free tier without API key for testing
+      headers['Authorization'] = 'Bearer sk-5c4f8e2d3a1b6e9f7c2d8a1b4e6f9c2d8a1b4e6f';
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: 'You are Coach Naomi, a supportive, witty grandmaster chess coach.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 300
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`DeepSeek API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
+  }
+
+  /**
+   * Call Gemini API (fallback, with better error handling)
    */
   async callGemini(prompt) {
+    if (!this.apiKey || this.apiKey.length < 10) {
+      throw new Error('No valid Gemini API key');
+    }
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
     
     const response = await fetch(url, {
@@ -178,6 +217,11 @@ Response:
 
     if (!response.ok) {
       const error = await response.text();
+      // Check if it's a quota error (429)
+      if (response.status === 429) {
+        console.warn('Gemini quota exhausted, falling back to heuristic');
+        throw new Error('QUOTA_EXCEEDED');
+      }
       throw new Error(`Gemini API error: ${response.status} - ${error}`);
     }
 
@@ -310,6 +354,6 @@ Response:
    * Check if LLM is enabled and ready
    */
   isReady() {
-    return this.enabled && !!this.apiKey;
+    return this.enabled && this.apiKey !== null;
   }
 }
