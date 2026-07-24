@@ -215,15 +215,18 @@ export class ChessEngine {
       if (level === 'Beginner') {
         this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 3');
-        this.currentSkillLevel = 3; // BUG FIX: Track skill
+        this.currentSkillLevel = 3;
+        this.currentElo = 600; // FIX #1: Track ELO so classification uses correct scale
       } else if (level === 'Club') {
         this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 10');
-        this.currentSkillLevel = 10; // BUG FIX: Track skill
+        this.currentSkillLevel = 10;
+        this.currentElo = 1200; // FIX #1: Track ELO so classification uses correct scale
       } else if (level === 'Master') {
         this.sendCommand('setoption name UCI_LimitStrength value false');
         this.sendCommand('setoption name Skill Level value 20');
-        this.currentSkillLevel = 20; // BUG FIX: Track skill
+        this.currentSkillLevel = 20;
+        this.currentElo = 2600; // FIX #1: Track ELO so classification uses correct scale
       } else if (level === 'ELO') {
         this.setEngineElo(chessElo);
       }
