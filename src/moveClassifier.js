@@ -1,107 +1,522 @@
-/**
- * Move Classification Utility
- * Provides unified move classification logic for both player and AI moves
- */
+import {
 
-/**
- * Classifies a chess move based on centipawn loss from best move
- * 
- * @param {string} playedMoveUci - UCI notation of move played (e.g., 'e2e4')
- * @param {string} bestMoveUci - UCI notation of best move according to analysis
- * @param {number} bestMoveScore - Evaluation score of best move (in centipawns)
- * @param {number} playedMoveScore - Evaluation score of played move (in centipawns)
- * @param {number} [scale=1.0] - Classification threshold multiplier for ELO adjustment
- *   - 1.0 = Master level (normal thresholds)
- *   - 1.5 = Advanced (1800 ELO)
- *   - 2.0 = Intermediate (1400 ELO)
- *   - 3.0 = Weak (1000 ELO)
- *   - 4.0 = Ultra-weak (600 ELO)
- * 
- * @returns {string} Classification: 'Brilliant', 'Great', 'Best Move', 'Excellent', 
- *   'Good', 'Inaccuracy', 'Mistake', or 'Blunder'
- * 
- * @example
- * // Master-level player move: played e4 instead of best move d4
- * const classification = classifyMove('e2e4', 'd2d4', 50, 40, 1.0);
- * // Returns: 'Excellent' (10cp difference < 20cp threshold)
- * 
- * @example
- * // 300 ELO move: played h6 when best was e4
- * const classification = classifyMove('h7h6', 'e2e4', 150, -150, 4.0);
- * // Returns: 'Blunder' (300cp difference > 220*4.0=880cp threshold? No, it's 300cp diff)
- * // Actually: 300cp > 220cp, so 'Blunder' even at scale 4.0
- */
-export function classifyMove(playedMoveUci, bestMoveUci, bestMoveScore, playedMoveScore, scale = 1.0) {
-  // If the move played IS the best move
-  if (playedMoveUci === bestMoveUci) {
-    const roll = Math.random();
-    if (roll < 0.05) {
-      return 'Brilliant';
-    } else if (roll < 0.25) {
-      return 'Great';
-    } else {
-      return 'Best Move';
+    evaluationToWinProbability,
+
+    winProbabilityLoss,
+
+    accuracyFromWinProbability,
+
+    getPositionCategory
+
+} from "./winProbability.js";
+
+
+import {
+    classifyFromLoss
+} from "./thresholds.js";
+
+
+import {
+    isBrilliant
+} from "./brilliantDetector.js";
+
+
+import {
+    isGreat
+} from "./greatMoveDetector.js";
+
+
+
+
+
+export function classifyMove(data) {
+
+
+    const {
+
+        playedMove,
+
+        bestMove,
+
+
+        evalBefore,
+
+        evalAfter,
+
+
+        bestEval,
+
+
+        fenBefore,
+
+        fenAfter,
+
+
+        playerColor,
+
+
+        moveNumber,
+
+
+        openingMove = false,
+
+
+        multipv = [],
+
+
+        multiPV = [],
+
+
+        isForced = false
+
+
+    } = data;
+
+
+
+    /*
+        Support both names
+    */
+
+    const candidates =
+        multipv.length
+            ? multipv
+            : multiPV;
+
+
+
+
+
+    //----------------------------------------
+    // Opening
+    //----------------------------------------
+
+    if(openingMove) {
+
+
+        return buildResult(
+            "Book",
+            evalBefore,
+            evalAfter,
+            bestEval,
+            "Opening theory."
+        );
+
     }
-  }
 
-  // Calculate centipawn loss (difference from best move)
-  const cpLoss = Math.max(0, bestMoveScore - playedMoveScore);
 
-  // Apply scaled thresholds based on ELO/difficulty
-  if (cpLoss < 20 * scale) {
-    return 'Excellent';
-  } else if (cpLoss < 60 * scale) {
-    return 'Good';
-  } else if (cpLoss < 120 * scale) {
-    return 'Inaccuracy';
-  } else if (cpLoss < 220 * scale) {
-    return 'Mistake';
-  } else {
-    return 'Blunder';
-  }
+
+
+
+
+    //----------------------------------------
+    // Was it best?
+    //----------------------------------------
+
+    const isBest =
+
+        playedMove === bestMove
+
+        ||
+
+        candidates.some(move =>
+
+            (
+                move.moveUci === playedMove
+                ||
+                move.move === playedMove
+            )
+
+            &&
+
+            Math.abs(
+                bestEval - move.score
+            ) <= 12
+
+        );
+
+
+
+
+
+
+
+
+    if(isBest) {
+
+
+
+        //--------------------------------
+        // Brilliant check
+        //--------------------------------
+
+        if(
+
+            isBrilliant({
+
+                classification:"Best",
+
+                fenBefore,
+
+                fenAfter,
+
+                playerColor,
+
+                evalBefore,
+
+                evalAfter,
+
+                bestEval,
+
+                isForced
+
+            })
+
+        ) {
+
+
+            return buildResult(
+
+                "Brilliant",
+
+                evalBefore,
+
+                evalAfter,
+
+                bestEval,
+
+                "A brilliant sacrifice or tactical idea."
+
+            );
+
+        }
+
+
+
+
+
+
+
+        //--------------------------------
+        // Great check
+        //--------------------------------
+
+        if(
+
+            isGreat({
+
+                classification:"Best",
+
+                multipv:candidates,
+
+                evalBefore,
+
+                evalAfter,
+
+                bestEval
+
+            })
+
+        ) {
+
+
+            return buildResult(
+
+                "Great",
+
+                evalBefore,
+
+                evalAfter,
+
+                bestEval,
+
+                "A difficult and accurate move."
+
+            );
+
+        }
+
+
+
+
+
+
+
+        return buildResult(
+
+            "Best",
+
+            evalBefore,
+
+            evalAfter,
+
+            bestEval,
+
+            "Engine's preferred move."
+
+        );
+
+
+    }
+
+
+
+
+
+
+
+    //----------------------------------------
+    // Mate loss detection
+    //----------------------------------------
+
+    if(
+
+        Math.abs(evalBefore) >= 30000
+
+        &&
+
+        Math.abs(evalAfter) < 30000
+
+    ) {
+
+
+        return buildResult(
+
+            "Blunder",
+
+            evalBefore,
+
+            evalAfter,
+
+            bestEval,
+
+            "Missed a forced mate."
+
+        );
+
+    }
+
+
+
+
+
+
+
+    //----------------------------------------
+    // Normal evaluation loss
+    //----------------------------------------
+
+    const category =
+        getPositionCategory(
+            evalBefore
+        );
+
+
+
+    const loss =
+
+        Math.max(
+
+            0,
+
+            winProbabilityLoss(
+
+                bestEval,
+
+                evalAfter
+
+            )
+
+        );
+
+
+
+
+
+
+    const classification =
+
+        classifyFromLoss(
+
+            category,
+
+            loss
+
+        );
+
+
+
+
+
+
+
+    return buildResult(
+
+        classification,
+
+        evalBefore,
+
+        evalAfter,
+
+        bestEval,
+
+        buildReason(
+            classification
+        )
+
+    );
+
 }
 
-/**
- * Calculate move accuracy as a percentage (0-100)
- * Used for accuracy tracking and win probability calculations
- * 
- * @param {number} centipawnLoss - How much worse the move was than best (cp)
- * @param {number} [scale=1.0] - ELO adjustment scale (optional)
- * @returns {number} Accuracy percentage (15-100)
- * 
- * @example
- * getAccuracy(0) // → 100 (perfect move)
- * getAccuracy(50) // → ~95 (small mistake)
- * getAccuracy(300) // → ~40 (big blunder)
- */
-export function getAccuracy(centipawnLoss, scale = 1.0) {
-  const scaledLoss = centipawnLoss / scale;
-  const accuracy = Math.max(15, Math.round(100 * Math.exp(-0.003 * scaledLoss)));
-  return accuracy;
+
+
+
+
+
+
+
+function buildResult(
+
+    classification,
+
+    evalBefore,
+
+    evalAfter,
+
+    bestEval,
+
+    reason=""
+
+) {
+
+
+    return {
+
+
+        classification,
+
+
+        accuracy:
+
+            accuracyFromWinProbability(
+
+                bestEval,
+
+                evalAfter
+
+            ),
+
+
+
+        cpLoss:
+
+            Math.max(
+
+                0,
+
+                bestEval - evalAfter
+
+            ),
+
+
+
+        evaluationBefore:
+
+            evalBefore,
+
+
+
+        evaluationAfter:
+
+            evalAfter,
+
+
+
+        bestEvaluation:
+
+            bestEval,
+
+
+
+        winProbabilityBefore:
+
+            evaluationToWinProbability(
+                evalBefore
+            ),
+
+
+
+        winProbabilityAfter:
+
+            evaluationToWinProbability(
+                evalAfter
+            ),
+
+
+
+        reason
+
+
+    };
+
+
 }
 
-/**
- * Get the scale factor for a given ELO rating
- * Used to adjust classification thresholds based on opponent strength
- * 
- * @param {number} elo - Chess rating (100-2700)
- * @returns {number} Scale factor to multiply thresholds by
- * 
- * @example
- * getScaleForElo(300) // → 4.0 (very weak player)
- * getScaleForElo(1200) // → 2.5
- * getScaleForElo(2600) // → 1.0 (master level)
- */
-export function getScaleForElo(elo) {
-  if (elo <= 600) {
-    return 4.0; // Ultra-weak play (300-600 ELO)
-  } else if (elo <= 1000) {
-    return 3.0; // Weak play (600-1000 ELO)
-  } else if (elo <= 1400) {
-    return 2.0; // Intermediate play (1000-1400 ELO)
-  } else if (elo <= 1800) {
-    return 1.5; // Advanced play (1400-1800 ELO)
-  } else {
-    return 1.0; // Master level (1800-2700 ELO)
-  }
+
+
+
+
+
+
+
+function buildReason(type) {
+
+
+    const reasons = {
+
+
+        Best:
+            "Engine's preferred move.",
+
+
+        Brilliant:
+            "A creative tactical idea or sacrifice.",
+
+
+        Great:
+            "A difficult and accurate move.",
+
+
+        Excellent:
+            "Maintains the advantage.",
+
+
+        Good:
+            "A solid move.",
+
+
+        Inaccuracy:
+            "A stronger continuation existed.",
+
+
+        Miss:
+            "A stronger tactical opportunity was missed.",
+
+
+        Mistake:
+            "The position noticeably worsened.",
+
+
+        Blunder:
+            "The move caused serious damage.",
+
+
+        Book:
+            "Opening theory."
+
+    };
+
+
+    return reasons[type] || "";
+
 }
