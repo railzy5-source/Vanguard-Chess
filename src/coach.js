@@ -1,6 +1,7 @@
 /**
  * Coach Naomi - Coach Dialogue & Expression Logic
  * AI Grandmaster Chess Coach - Deep tactical, positional, and enemy threat breakdown.
+ * Now with LLM integration for deep explanations (falls back to heuristic).
  */
 
 import hikariAvatar from './assets/images/hikari_coach_avatar_1784810444071.jpg';
@@ -66,7 +67,7 @@ export class CoachNaomi {
     if (!this.ttsEnabled || !this.speechSynth) return;
 
     try {
-      this.speechSynth.cancel(); // Stop any previous speech
+      this.speechSynth.cancel();
 
       // Strip emojis and markdown symbols for cleaner speech
       const cleanText = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}👑💕✨😊😮💪😏♟️↩️🏳️🎉❌💡🔍]/gu, '').trim();
@@ -75,7 +76,6 @@ export class CoachNaomi {
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
 
-      // Select female voice if available
       const voices = this.cachedVoices.length ? this.cachedVoices : this.speechSynth.getVoices();
       const femaleVoice = voices.find(v => 
         v.lang.startsWith('en') && (
@@ -401,8 +401,28 @@ export class CoachNaomi {
   }
 
   /**
-   * Evaluates position facts (hanging pieces, checks, threats)
-   * grounded in actual game state using FactsEngine.
+   * Maps the opponent's actual move classification to a coach emotion/badge
+   */
+  getOpponentEmotionByClass(classification) {
+    switch (classification) {
+      case 'Brilliant':
+      case 'Best Move':
+      case 'Excellent':
+        return 'concern';       // Opponent played very well - stay alert
+      case 'Blunder':
+      case 'Mistake':
+        return 'opportunity';   // Opponent slipped up - good news for you
+      case 'Inaccuracy':
+      case 'Good':
+      case 'Book':
+        return 'tactical';      // Nothing alarming either way
+      default:
+        return 'tactical';
+    }
+  }
+
+  /**
+   * Computes position facts using FactsEngine
    */
   computePositionFacts(game) {
     if (!game) return null;
@@ -424,51 +444,72 @@ export class CoachNaomi {
 
   /**
    * React to player or opponent move events with detailed GM analysis
+   * Uses LLM for deep explanations if available, falls back to heuristic
    */
-  reactToMove(moveResult) {
-    if (moveResult.openingName && moveResult.isPlayer) {
-      return this.speak(`You're playing the ${moveResult.openingName}!`, 'tactical', {
-        rationale: "This is known book theory! It fights directly for center control and develops pieces to active squares early.",
-        enemyPlan: "Opponent will look to challenge your central pawn structure and create counterplay.",
-        warning: "Watch out for premature pawn pushes that create dark-square or light-square weaknesses."
-      }, true);
+  async reactToMove(moveResult) {
+    // Get LLM explanation if available (through global app reference)
+    let llmExplanation = null;
+    if (moveResult.game && window.app?.llmCoach) {
+      try {
+        const facts = moveResult.facts || this.computePositionFacts(moveResult.game);
+        llmExplanation = await window.app.llmCoach.getDeepExplanation(moveResult, moveResult.game, facts);
+      } catch (e) {
+        console.warn('LLM explanation failed:', e);
+      }
     }
 
+    // BOOK MOVE — Override everything, don't penalize principled opening moves
+    if (moveResult.isBook) {
+      const bookLines = [
+        `📖 Solid opening theory! The ${moveResult.openingName || 'opening'} — a principled, sound choice for steady development.`,
+        `📖 The ${moveResult.openingName || 'opening'} is perfectly playable! Grandmasters trust this system.`,
+        `📖 Great opening choice! The ${moveResult.openingName || 'opening'} establishes a strong, safe position.`
+      ];
+      
+      this.speak(
+        bookLines[Math.floor(Math.random() * bookLines.length)],
+        'supportive',
+        {
+          rationale: llmExplanation?.rationale || `This is a well-established opening line. ${moveResult.openingName || 'This opening'} focuses on solid development and central control without overextending.`,
+          enemyPlan: llmExplanation?.enemyPlan || `Your opponent will likely challenge your center with pawn breaks or try to trade off your active pieces.`,
+          warning: llmExplanation?.warning || `Stay alert for tactical threats and keep your pieces well-coordinated.`
+        },
+        true
+      );
+      return;
+    }
+
+    // Checkmate
     if (moveResult.isCheckmate) {
       if (moveResult.isPlayer) {
-        return this.speak("BOOM! Checkmate! You calculated that line clean to the end. Absolute perfection!", 'surprised', null, true);
+        this.speak("BOOM! Checkmate! You calculated that line clean to the end. Absolute perfection!", 'surprised', null, true);
       } else {
-        return this.speak("Checkmate on the board! Don't worry, let's look at the critical turning point in Deep Dive.", 'supportive', null, false);
+        this.speak("Checkmate on the board! Don't worry, let's look at the critical turning point in Deep Dive.", 'supportive', null, false);
       }
+      return;
     }
 
-    let facts = null;
-    if (moveResult.game) {
-      facts = this.computePositionFacts(moveResult.game);
-    }
-
+    // Player move
     if (moveResult.isPlayer) {
       const classification = moveResult.classification || 'Good';
-      const bestMoveSan = moveResult.bestMoveSan || '';
       const san = moveResult.san || '';
 
-      let text = ``;
-      let rationale = ``;
+      // Use LLM explanation if available
+      if (llmExplanation) {
+        this.speak(llmExplanation.text, this.getEmotionByClass(classification), {
+          rationale: llmExplanation.rationale || '',
+          enemyPlan: llmExplanation.enemyPlan || '',
+          warning: llmExplanation.warning || ''
+        }, true);
+        return;
+      }
+
+      // Fallback: heuristic responses
+      const bestMoveSan = moveResult.bestMoveSan || '';
+      let text = '';
+      let rationale = '';
       let enemyPlan = moveResult.enemyPlan || `Opponent will look to challenge your piece structure and find active tactical counterplay.`;
       let warning = moveResult.warning || `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
-
-      if (facts) {
-        if (facts.hangingOpponent.length > 0) {
-          const h = facts.hangingOpponent[0];
-          warning = `Tactical Fact: The opponent's ${h.name} on ${h.square} is currently undefended and under attack!`;
-        } else if (facts.hangingCurrent.length > 0) {
-          const h = facts.hangingCurrent[0];
-          warning = `Tactical Fact: Be careful—your ${h.name} on ${h.square} is under threat!`;
-        }
-        if (facts.inCheck) {
-          enemyPlan = `Check delivered! The opponent's King is forced to respond immediately.`;
-        }
-      }
 
       if (classification === 'Brilliant') {
         text = `Brilliant finding ${san}! That's a master-level tactical stroke!`;
@@ -476,16 +517,13 @@ export class CoachNaomi {
       } else if (classification === 'Best Move') {
         text = `Excellent move! ${san} is the top Stockfish recommendation.`;
         rationale = `Perfect! You played the absolute best move in this position, maintaining optimal board structure, space control, and keeping the initiative fully in your hands.`;
-      } else if (classification === 'Book') {
-        text = `Playing book theory with ${san}.`;
-        rationale = `This is known opening book theory! It is a great move because following established lines ensures balanced development, central pressure, and solid king safety.`;
       } else if (classification === 'Excellent') {
         text = `Excellent placement with ${san}!`;
         rationale = `This is an excellent, very high-quality move! It coordinates your forces, improves active piece placement, and maintains your tactical edge over the opponent.`;
       } else if (classification === 'Good') {
         text = `A solid choice with ${san}.`;
         if (bestMoveSan && bestMoveSan !== san) {
-          rationale = `This is a good, sound move. However, playing **${bestMoveSan}** would have been better because **${bestMoveSan}** takes more active control over the center, coordinates your pieces better, or creates a direct threat.`;
+          rationale = `This is a good, sound move. However, playing **${bestMoveSan}** would have been better because it takes more active control over the center, coordinates your pieces better, or creates a direct threat.`;
         } else {
           rationale = `This is a good, solid move that develops your position and keeps the game balanced.`;
         }
@@ -516,78 +554,72 @@ export class CoachNaomi {
       }
 
       this.speak(text, this.getEmotionByClass(classification), { rationale, enemyPlan, warning }, true);
-    } else {
-      const classification = moveResult.classification || '';
-      const san = moveResult.san || '';
-      const text = `Opponent played ${san}.`;
-
-      let enemyPlan = `Opponent is preparing to chip away at your center using flank pawn strikes or active piece pressure.`;
-      if (moveResult.piece === 'n') {
-        enemyPlan = `Watch out! The Knight on ${san.replace(/[^a-h1-8]/g, '') || 'the board'} is eyeing potential fork coordinates and trying to establish an active outpost in your territory.`;
-      } else if (moveResult.piece === 'b') {
-        enemyPlan = `The Bishop is controlling a powerful diagonal, aiming at your pieces and scanning for potential tactical pins or long-range strikes.`;
-      } else if (moveResult.piece === 'r') {
-        enemyPlan = `The Rook is claiming an open or semi-open file, aiming to double up and prepare high-rank infiltration.`;
-      } else if (moveResult.piece === 'q') {
-        enemyPlan = `The heavy Queen has entered the action! She is coordinating threats, scanning for checks, and looking for tactical weak points in your camp.`;
-      } else if (moveResult.piece === 'p') {
-        enemyPlan = `Opponent is advancing pawns to gain space, open lines of attack, and restrict your piece development. Watch for possible pawn breaks.`;
-      } else if (moveResult.isCheck) {
-        enemyPlan = `The enemy King is directing a check! Look for potential fork, pin, or discovery attacks accompanying this check.`;
-      }
-
-      let warning = '';
-      if (facts) {
-        if (facts.hangingCurrent.length > 0) {
-          const h = facts.hangingCurrent[0];
-          warning = `Warning: Opponent's move puts your ${h.name} on ${h.square} under direct threat!`;
-        } else if (facts.hangingOpponent.length > 0) {
-          const h = facts.hangingOpponent[0];
-          warning = `Tactical Opportunity: The opponent left their ${h.name} on ${h.square} undefended!`;
-        }
-      }
-
-      if (!warning) {
-        if (classification === 'Blunder') {
-          warning = `Opponent just blundered with ${san}! Look for a way to capitalize immediately.`;
-        } else if (classification === 'Mistake') {
-          warning = `That's a loose move from the opponent - look for ways to press your advantage.`;
-        } else if (classification === 'Inaccuracy') {
-          warning = `A slightly imprecise move from the opponent - stay alert for small opportunities.`;
-        } else if (classification === 'Brilliant' || classification === 'Best Move' || classification === 'Excellent') {
-          warning = `That was a strong, precise move from the opponent - stay sharp and don't give anything back.`;
-        } else {
-          warning = `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
-        }
-      }
-
-      let rationale = null;
-
-      this.speak(text, this.getOpponentEmotionByClass(classification), { rationale, enemyPlan, warning }, false);
+      return;
     }
-  }
 
-  /**
-   * Maps the opponent's actual move classification to a coach emotion/badge,
-   * so the badge reflects how good or bad the opponent's move really was
-   * (instead of always showing "Danger / Mistake").
-   */
-  getOpponentEmotionByClass(classification) {
-    switch (classification) {
-      case 'Brilliant':
-      case 'Best Move':
-      case 'Excellent':
-        return 'concern';       // Opponent played very well - stay alert
-      case 'Blunder':
-      case 'Mistake':
-        return 'opportunity';   // Opponent slipped up - good news for you
-      case 'Inaccuracy':
-      case 'Good':
-      case 'Book':
-        return 'tactical';      // Nothing alarming either way
-      default:
-        return 'tactical';
+    // Opponent move
+    const classification = moveResult.classification || '';
+    const san = moveResult.san || '';
+
+    // Use LLM for opponent move analysis if available
+    if (llmExplanation) {
+      this.speak(llmExplanation.text, this.getOpponentEmotionByClass(classification), {
+        rationale: llmExplanation.rationale || '',
+        enemyPlan: llmExplanation.enemyPlan || '',
+        warning: llmExplanation.warning || ''
+      }, false);
+      return;
     }
+
+    // Fallback opponent response
+    const text = `Opponent played ${san}.`;
+    let enemyPlan = `Opponent is preparing to chip away at your center using flank pawn strikes or active piece pressure.`;
+    
+    if (moveResult.piece === 'n') {
+      enemyPlan = `Watch out! The Knight on ${san.replace(/[^a-h1-8]/g, '') || 'the board'} is eyeing potential fork coordinates and trying to establish an active outpost in your territory.`;
+    } else if (moveResult.piece === 'b') {
+      enemyPlan = `The Bishop is controlling a powerful diagonal, aiming at your pieces and scanning for potential tactical pins or long-range strikes.`;
+    } else if (moveResult.piece === 'r') {
+      enemyPlan = `The Rook is claiming an open or semi-open file, aiming to double up and prepare high-rank infiltration.`;
+    } else if (moveResult.piece === 'q') {
+      enemyPlan = `The heavy Queen has entered the action! She is coordinating threats, scanning for checks, and looking for tactical weak points in your camp.`;
+    } else if (moveResult.piece === 'p') {
+      enemyPlan = `Opponent is advancing pawns to gain space, open lines of attack, and restrict your piece development. Watch for possible pawn breaks.`;
+    } else if (moveResult.isCheck) {
+      enemyPlan = `The enemy King is directing a check! Look for potential fork, pin, or discovery attacks accompanying this check.`;
+    }
+
+    let warning = '';
+    const facts = moveResult.facts || this.computePositionFacts(moveResult.game);
+    if (facts) {
+      if (facts.hangingCurrent.length > 0) {
+        const h = facts.hangingCurrent[0];
+        warning = `Warning: Opponent's move puts your ${h.name} on ${h.square} under direct threat!`;
+      } else if (facts.hangingOpponent.length > 0) {
+        const h = facts.hangingOpponent[0];
+        warning = `Tactical Opportunity: The opponent left their ${h.name} on ${h.square} undefended!`;
+      }
+    }
+
+    if (!warning) {
+      if (classification === 'Blunder') {
+        warning = `Opponent just blundered with ${san}! Look for a way to capitalize immediately.`;
+      } else if (classification === 'Mistake') {
+        warning = `That's a loose move from the opponent - look for ways to press your advantage.`;
+      } else if (classification === 'Inaccuracy') {
+        warning = `A slightly imprecise move from the opponent - stay alert for small opportunities.`;
+      } else if (classification === 'Brilliant' || classification === 'Best Move' || classification === 'Excellent') {
+        warning = `That was a strong, precise move from the opponent - stay sharp and don't give anything back.`;
+      } else {
+        warning = `Be mindful of long-range lines of sight and make sure your king safety isn't compromised.`;
+      }
+    }
+
+    this.speak(text, this.getOpponentEmotionByClass(classification), { 
+      rationale: null, 
+      enemyPlan, 
+      warning 
+    }, false);
   }
 
   /**
