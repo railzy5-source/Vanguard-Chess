@@ -9,8 +9,6 @@
  * - Bot strength scaling
  * - Objective analysis
  * - Evaluation data provider
- *
- * Classification and coaching are handled separately.
  */
 
 import { Chess } from 'chess.js';
@@ -26,6 +24,8 @@ export class ChessEngine {
 
         this.uciReady = false;
 
+        this.readyResolve = null;
+
         this.engineBusy = false;
 
         this.multiPVData = [];
@@ -33,7 +33,6 @@ export class ChessEngine {
         this.currentTask = null;
 
 
-        // Bot settings
         this.difficulty = 'Club';
 
         this.currentSkillLevel = 10;
@@ -41,118 +40,115 @@ export class ChessEngine {
         this.currentElo = 1500;
 
 
-        // Analysis cache
         this.analysisCache = new Map();
 
-
-        // Prevent stale PV data
         this.lastDepth = 0;
 
 
-        this.initStockfish();
+        this.readyPromise = this.initStockfish();
 
     }
 
 
 
-    /**
-     * Initialise Stockfish worker
-     */
-    initStockfish() {
+    async initStockfish() {
 
-        try {
+        return new Promise((resolve) => {
 
-
-            const stockfishCdn =
-                'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+            this.readyResolve = resolve;
 
 
+            try {
 
-            const workerCode =
-                `importScripts('${stockfishCdn}');`;
+                const stockfishCdn =
+                    'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+
+
+                const workerCode =
+                    `importScripts('${stockfishCdn}');`;
+
+
+                const blob =
+                    new Blob(
+                        [workerCode],
+                        {
+                            type:
+                            'application/javascript'
+                        }
+                    );
+
+
+                const blobUrl =
+                    URL.createObjectURL(blob);
+
+
+                this.worker =
+                    new Worker(blobUrl);
 
 
 
-            const blob =
-                new Blob(
-                    [workerCode],
-                    {
-                        type:
-                        'application/javascript'
-                    }
+                this.worker.onmessage =
+                    (e) => {
+
+                        this.handleEngineMessage(
+                            e.data
+                        );
+
+                    };
+
+
+
+                this.worker.onerror =
+                    (err) => {
+
+                        console.warn(
+                            'Stockfish worker failed:',
+                            err
+                        );
+
+
+                        this.worker = null;
+
+
+                        if(this.readyResolve)
+                            this.readyResolve(false);
+
+                    };
+
+
+
+                this.sendCommand(
+                    'uci'
                 );
 
 
+            }
+            catch(e) {
 
-            const blobUrl =
-                URL.createObjectURL(blob);
-
-
-
-            this.worker =
-                new Worker(blobUrl);
-
+                console.warn(
+                    'Stockfish unavailable:',
+                    e
+                );
 
 
-            this.worker.onmessage =
-                (e) => {
-
-                    this.handleEngineMessage(
-                        e.data
-                    );
-
-                };
+                this.worker = null;
 
 
+                resolve(false);
 
-            this.worker.onerror =
-                (err) => {
-
-                    console.warn(
-                        'Stockfish worker failed:',
-                        err
-                    );
+            }
 
 
-                    this.worker = null;
-
-                };
-
-
-
-            // Start UCI handshake
-
-            this.sendCommand(
-                'uci'
-            );
-
-
-
-        }
-        catch(e) {
-
-
-            console.warn(
-                'Stockfish unavailable. Using fallback engine.',
-                e
-            );
-
-
-            this.worker = null;
-
-        }
+        });
 
     }
 
 
 
 
-    /**
-     * Send command safely
-     */
     sendCommand(command) {
 
-        if (!this.worker)
+        if(!this.worker)
             return;
 
 
@@ -166,34 +162,16 @@ export class ChessEngine {
 
 
 
-    /**
-     * Handle UCI messages
-     */
     handleEngineMessage(msg) {
 
 
-        if (typeof msg !== 'string')
+        if(typeof msg !== 'string')
             return;
 
 
 
-        /*
-            Stockfish startup
 
-            uci
-              |
-              ↓
-            uciok
-              |
-              ↓
-            options
-              |
-              ↓
-            isready
-        */
-
-
-        if (msg === 'uciok') {
+        if(msg === 'uciok') {
 
 
             this.uciReady = true;
@@ -225,10 +203,21 @@ export class ChessEngine {
 
 
 
-        if (msg === 'readyok') {
+
+
+        if(msg === 'readyok') {
 
 
             this.isReady = true;
+
+
+            if(this.readyResolve) {
+
+                this.readyResolve(true);
+
+                this.readyResolve = null;
+
+            }
 
 
             return;
@@ -238,7 +227,7 @@ export class ChessEngine {
 
 
 
-        if (
+        if(
             msg.startsWith('info depth')
             &&
             msg.includes('score')
@@ -257,24 +246,18 @@ export class ChessEngine {
 
 
 
-        if (
+        if(
             msg.startsWith('bestmove')
         ) {
 
 
-            const parts =
-                msg.split(' ');
-
-
-
             const bestMove =
-                parts[1];
+                msg.split(' ')[1];
 
 
 
-            if (!this.currentTask)
+            if(!this.currentTask)
                 return;
-
 
 
 
@@ -289,7 +272,6 @@ export class ChessEngine {
 
 
 
-
             if(task.type === 'bestmove') {
 
 
@@ -298,9 +280,8 @@ export class ChessEngine {
                     bestMove,
 
                     multiPV:
-                        [
-                            ...this.multiPVData
-                        ]
+                        this.multiPVData
+                        .filter(Boolean)
 
                 });
 
@@ -308,39 +289,24 @@ export class ChessEngine {
             }
 
 
-
-            else if(task.type === 'analyze') {
+            if(task.type === 'analyze') {
 
 
                 task.resolve(
 
-                    [
-                        ...this.multiPVData
-                    ]
+                    this.multiPVData
+                    .filter(Boolean)
 
                 );
 
 
             }
 
+
         }
 
     }
-
-    /**
-     * Parse Stockfish info line
-     *
-     * Converts UCI output into:
-     * {
-     *   rank,
-     *   moveUci,
-     *   score,
-     *   evalStr,
-     *   pv
-     * }
-     */
-    parseInfoLine(msg) {
-
+        parseInfoLine(msg) {
 
         const multipvMatch =
             msg.match(/multipv (\d+)/);
@@ -359,7 +325,7 @@ export class ChessEngine {
 
 
 
-        if (!pvMatch)
+        if(!pvMatch)
             return;
 
 
@@ -392,16 +358,7 @@ export class ChessEngine {
 
 
 
-        /*
-            winProbability.js uses:
-
-            MATE_SCORE = 32000
-
-            Keep everything compatible.
-        */
-
-
-        if (mateMatch) {
+        if(mateMatch) {
 
 
             const mate =
@@ -411,18 +368,18 @@ export class ChessEngine {
                 );
 
 
-
             score =
                 mate > 0
-                    ? 32000 - mate
-                    : -32000 + Math.abs(mate);
+                ? 32000 - mate
+                : -32000 + Math.abs(mate);
 
 
 
             evalStr =
                 mate > 0
-                    ? `#${mate}`
-                    : `-#${Math.abs(mate)}`;
+                ? `#${mate}`
+                : `-#${Math.abs(mate)}`;
+
 
         }
 
@@ -437,12 +394,11 @@ export class ChessEngine {
                 );
 
 
-
             evalStr =
                 (
                     score >= 0
-                        ? '+'
-                        : ''
+                    ? '+'
+                    : ''
                 )
                 +
                 (
@@ -453,24 +409,17 @@ export class ChessEngine {
 
 
 
-
         this.multiPVData[rank - 1] = {
-
 
             rank,
 
-
             moveUci,
-
 
             score,
 
-
             evalStr,
 
-
             pv
-
 
         };
 
@@ -480,9 +429,6 @@ export class ChessEngine {
 
 
 
-    /**
-     * Set engine strength by ELO
-     */
     setEngineElo(elo) {
 
 
@@ -515,7 +461,6 @@ export class ChessEngine {
 
 
 
-
         if(clamped <= 600) {
 
             skillLevel = 0;
@@ -524,7 +469,6 @@ export class ChessEngine {
             blunderChance = 0.55;
 
         }
-
 
         else if(clamped <= 1000) {
 
@@ -535,7 +479,6 @@ export class ChessEngine {
 
         }
 
-
         else if(clamped <= 1400) {
 
             skillLevel = 5;
@@ -544,7 +487,6 @@ export class ChessEngine {
             blunderChance = 0.25;
 
         }
-
 
         else if(clamped <= 1800) {
 
@@ -555,7 +497,6 @@ export class ChessEngine {
 
         }
 
-
         else if(clamped <= 2200) {
 
             skillLevel = 15;
@@ -564,8 +505,6 @@ export class ChessEngine {
             blunderChance = 0.05;
 
         }
-
-
 
         else {
 
@@ -577,11 +516,10 @@ export class ChessEngine {
 
 
 
-
-
         this.sendCommand(
             `setoption name Skill Level value ${skillLevel}`
         );
+
 
 
         this.currentSkillLevel =
@@ -605,16 +543,13 @@ export class ChessEngine {
 
         };
 
-
     }
 
 
 
 
 
-    /**
-     * Set difficulty preset
-     */
+
     setDifficulty(
         level,
         chessElo = 1500
@@ -638,43 +573,31 @@ export class ChessEngine {
 
         const settings = {
 
-
-            Beginner: {
-
+            Beginner:{
                 skill:3,
-
                 elo:600
-
             },
 
-
-            Club: {
-
+            Club:{
                 skill:10,
-
                 elo:1200
-
             },
 
-
-            Master: {
-
+            Master:{
                 skill:20,
-
                 elo:2600
-
             }
 
         };
 
 
 
-        const s =
+        const selected =
             settings[level];
 
 
 
-        if(!s)
+        if(!selected)
             return;
 
 
@@ -684,20 +607,18 @@ export class ChessEngine {
         );
 
 
-
         this.sendCommand(
-            `setoption name Skill Level value ${s.skill}`
+            `setoption name Skill Level value ${selected.skill}`
         );
 
 
 
         this.currentSkillLevel =
-            s.skill;
-
+            selected.skill;
 
 
         this.currentElo =
-            s.elo;
+            selected.elo;
 
 
     }
@@ -707,199 +628,166 @@ export class ChessEngine {
 
 
 
-
-    /**
-     * Get engine best move
-     */
-    getBestMove(
+    async getBestMove(
         fen,
         difficulty = this.difficulty,
         chessElo = 1500
     ) {
 
 
-        return new Promise(
-            resolve => {
-
-
-                this.multiPVData = [];
+        await this.readyPromise;
 
 
 
-                let depth = 8;
-
-                let movetime = 800;
-
-                let blunderChance = 0;
+        return new Promise(resolve => {
 
 
-
-                if(difficulty === 'ELO') {
-
-
-                    const s =
-                        this.setEngineElo(
-                            chessElo
-                        );
-
-
-                    depth =
-                        s.depth;
-
-
-                    movetime =
-                        s.movetime;
-
-
-                    blunderChance =
-                        s.blunderChance;
-
-
-                }
+            this.multiPVData = [];
 
 
 
-                else {
+            let depth = 8;
 
+            let movetime = 800;
 
-                    const preset =
-                        this.setDifficulty(
-                            difficulty
-                        );
-
-
-                }
+            let blunderChance = 0;
 
 
 
+            if(difficulty === 'ELO') {
 
 
-                if(
-                    this.worker
-                    &&
-                    this.isReady
-                ) {
-
-
-                    this.engineBusy = true;
-
-
-
-                    this.currentTask = {
-
-
-                        type:'bestmove',
-
-
-                        resolve:
-                            result =>
-                                resolve({
-
-                                    ...result,
-
-                                    blunderChance
-
-                                })
-
-                    };
-
-
-
-                    this.sendCommand(
-                        `position fen ${fen}`
+                const settings =
+                    this.setEngineElo(
+                        chessElo
                     );
 
 
-
-                    this.sendCommand(
-                        `go depth ${depth} movetime ${movetime}`
-                    );
-
-                }
+                depth =
+                    settings.depth;
 
 
-
-                else {
-
-
-                    const fallback =
-                        this.fallbackAnalyze(
-                            fen,
-                            3
-                        );
+                movetime =
+                    settings.movetime;
 
 
-                    resolve({
-
-                        bestMove:
-                            fallback[0]?.moveUci
-                            || null,
-
-
-                        multiPV:
-                            fallback,
-
-
-                        blunderChance
-
-                    });
-
-
-                }
+                blunderChance =
+                    settings.blunderChance;
 
 
             }
 
-        );
+
+            else {
+
+
+                this.setDifficulty(
+                    difficulty
+                );
+
+            }
+
+
+
+            if(
+                this.worker
+                &&
+                this.isReady
+            ) {
+
+
+                this.engineBusy = true;
+
+
+                this.currentTask = {
+
+                    type:'bestmove',
+
+                    resolve:(result)=>{
+
+                        resolve({
+
+                            ...result,
+
+                            blunderChance
+
+                        });
+
+                    }
+
+                };
+
+
+
+                this.sendCommand(
+                    `position fen ${fen}`
+                );
+
+
+                this.sendCommand(
+                    `go depth ${depth} movetime ${movetime}`
+                );
+
+
+            }
+
+            else {
+
+
+                const fallback =
+                    this.fallbackAnalyze(
+                        fen,
+                        3
+                    );
+
+
+                resolve({
+
+                    bestMove:
+                        fallback[0]?.moveUci || null,
+
+
+                    multiPV:
+                        fallback,
+
+
+                    blunderChance
+
+                });
+
+
+            }
+
+
+        });
 
 
     }
-
-
-
-
-
-
-    /**
-     * Objective analysis.
-     *
-     * Always runs full strength.
-     *
-     * Used for:
-     * - move grading
-     * - accuracy
-     * - best move arrows
-     * - coach review
-     */
-    analyzePosition(
+        async analyzePosition(
         fen,
         multiPVCount = 3
     ) {
 
 
         const cacheKey =
-            `${fen}_${multiPVCount}_objective`;
+            `${fen}_${multiPVCount}`;
 
 
 
         if(this.analysisCache.has(cacheKey)) {
 
-            return Promise.resolve(
-                this.analysisCache.get(cacheKey)
-            );
+            return this.analysisCache.get(cacheKey);
 
         }
 
 
 
+        await this.readyPromise;
 
 
-        if(this.engineBusy) {
 
+        if(this.engineBusy)
             this.stop();
-
-        }
-
 
 
 
@@ -911,21 +799,24 @@ export class ChessEngine {
 
 
             const finish =
-                result => {
+                (result)=>{
 
 
-                    if(result?.length) {
+                    const clean =
+                        result.filter(Boolean);
+
+
+
+                    if(clean.length) {
 
 
                         this.analysisCache.set(
                             cacheKey,
-                            result
+                            clean
                         );
 
 
-
                         if(this.analysisCache.size > 100) {
-
 
                             const first =
                                 this.analysisCache
@@ -938,13 +829,13 @@ export class ChessEngine {
                                 first
                             );
 
-
                         }
 
                     }
 
 
-                    resolve(result);
+
+                    resolve(clean);
 
                 };
 
@@ -966,24 +857,15 @@ export class ChessEngine {
 
                 this.currentTask = {
 
-
                     type:'analyze',
 
-
                     resolve:finish
-
 
                 };
 
 
 
-
-                /*
-                    Force objective strength.
-
-                    Never inherit bot difficulty.
-                */
-
+                // Always objective analysis
 
                 this.sendCommand(
                     'setoption name UCI_LimitStrength value false'
@@ -995,17 +877,14 @@ export class ChessEngine {
                 );
 
 
-
                 this.sendCommand(
                     `setoption name MultiPV value ${multiPVCount}`
                 );
 
 
-
                 this.sendCommand(
                     `position fen ${fen}`
                 );
-
 
 
                 this.sendCommand(
@@ -1014,7 +893,6 @@ export class ChessEngine {
 
 
             }
-
 
             else {
 
@@ -1032,33 +910,12 @@ export class ChessEngine {
 
         });
 
-
     }
 
 
 
 
 
-
-
-    /**
-     * Evaluate a played move.
-     *
-     * This is the main connection point
-     * between engine and analysis modules.
-     *
-     * Returns:
-     *
-     * {
-     * fenBefore,
-     * fenAfter,
-     * playedMove,
-     * bestMove,
-     * bestEval,
-     * playedEval,
-     * multiPV
-     * }
-     */
     async evaluateMove({
 
         fenBefore,
@@ -1068,7 +925,6 @@ export class ChessEngine {
         playerColor
 
     }) {
-
 
 
         const before =
@@ -1084,7 +940,6 @@ export class ChessEngine {
 
 
 
-
         const best =
             before[0];
 
@@ -1097,25 +952,21 @@ export class ChessEngine {
 
 
 
-
-        const move = {
-
+        const move =
+        {
 
             from:
                 playedMove.substring(0,2),
 
-
             to:
                 playedMove.substring(2,4),
 
-
             promotion:
                 playedMove.length > 4
-                    ? playedMove.substring(4,5)
-                    : undefined
+                ? playedMove.substring(4,5)
+                : undefined
 
         };
-
 
 
 
@@ -1134,65 +985,52 @@ export class ChessEngine {
 
 
 
-
         const after =
             await this.analyzePosition(
                 fenAfter,
-                3
+                1
             );
 
 
 
+        // Correct score perspective
+
         const playedEval =
             after.length
-                ? after[0].score
-                : 0;
-
-
+            ? -after[0].score
+            : 0;
 
 
 
         return {
 
-
             fenBefore,
-
 
             fenAfter,
 
-
             playedMove,
-
 
             playerColor,
 
-
-
             san:
                 played.san,
-
 
 
             bestMove:
                 best.moveUci,
 
 
-
             bestEval:
                 best.score,
-
 
 
             playedEval,
 
 
-
             multiPV:
                 before
 
-
         };
-
 
     }
 
@@ -1202,22 +1040,13 @@ export class ChessEngine {
 
 
 
-
-    /**
-     * Generate continuation line.
-     *
-     * Uses Stockfish PV when available.
-     */
     getContinuationLine(
         fen,
         moveUci,
         plies = 10
     ) {
 
-
         const result = [];
-
-
 
         const game =
             new Chess(fen);
@@ -1227,7 +1056,7 @@ export class ChessEngine {
         try {
 
 
-            let move =
+            const first =
                 game.move({
 
                     from:
@@ -1245,7 +1074,7 @@ export class ChessEngine {
 
 
 
-            if(!move)
+            if(!first)
                 return result;
 
 
@@ -1255,20 +1084,15 @@ export class ChessEngine {
                 fen:
                     game.fen(),
 
-
                 moveSan:
-                    move.san,
-
+                    first.san,
 
                 moveUci,
 
-
                 color:
-                    move.color
+                    first.color
 
             });
-
-
 
 
 
@@ -1276,7 +1100,7 @@ export class ChessEngine {
                 let i = 1;
                 i < plies;
                 i++
-            ) {
+            ){
 
 
                 if(game.isGameOver())
@@ -1330,33 +1154,28 @@ export class ChessEngine {
                     fen:
                         game.fen(),
 
-
                     moveSan:
                         m.san,
 
-
                     moveUci:
                         next,
-
 
                     color:
                         m.color
 
                 });
 
-
             }
 
 
         }
-        catch(e) {
 
+        catch(e){
 
             console.error(
                 'Continuation error',
                 e
             );
-
 
         }
 
@@ -1372,15 +1191,10 @@ export class ChessEngine {
 
 
 
-
-    /**
-     * Offline fallback evaluator.
-     */
     fallbackAnalyze(
         fen,
         count = 3
-    ) {
-
+    ){
 
         const game =
             new Chess(fen);
@@ -1400,17 +1214,15 @@ export class ChessEngine {
 
 
         const white =
-            game.turn() === 'w';
+            game.turn()==='w';
 
 
 
-
-        const scores =
-            moves.map(move => {
+        const scored =
+            moves.map(move=>{
 
 
                 game.move(move);
-
 
 
                 const score =
@@ -1419,34 +1231,24 @@ export class ChessEngine {
                     );
 
 
-
                 game.undo();
-
 
 
 
                 return {
 
-
                     moveUci:
-                        move.from
-                        +
-                        move.to
-                        +
+                        move.from +
+                        move.to +
                         (move.promotion || ''),
-
-
 
                     san:
                         move.san,
-
-
 
                     score:
                         white
                         ? score
                         : -score
-
 
                 };
 
@@ -1455,56 +1257,42 @@ export class ChessEngine {
 
 
 
-
-        scores.sort(
+        scored.sort(
             (a,b)=>
                 b.score-a.score
         );
 
 
 
-        return scores
-            .slice(0,count)
-            .map(
-                (m,i)=>({
+        return scored
+        .slice(0,count)
+        .map((m,i)=>({
+
+            rank:i+1,
+
+            moveUci:m.moveUci,
+
+            san:m.san,
+
+            score:m.score,
+
+            evalStr:
+                (
+                    m.score>=0
+                    ? '+'
+                    :''
+                )
+                +
+                (
+                    m.score/100
+                ).toFixed(2),
 
 
-                    rank:i+1,
+            pv:[
+                m.moveUci
+            ]
 
-
-                    moveUci:
-                        m.moveUci,
-
-
-                    san:
-                        m.san,
-
-
-                    score:
-                        m.score,
-
-
-                    evalStr:
-                        (
-                            m.score >=0
-                            ? '+'
-                            :''
-                        )
-                        +
-                        (
-                            m.score/100
-                        ).toFixed(2),
-
-
-
-                    pv:[
-                        m.moveUci
-                    ]
-
-
-                })
-            );
-
+        }));
 
     }
 
@@ -1514,17 +1302,12 @@ export class ChessEngine {
 
 
 
-    evaluatePositionSimple(game) {
+    evaluatePositionSimple(game){
 
-
-        if(game.isCheckmate()) {
-
-
+        if(game.isCheckmate())
             return game.turn()==='w'
-                ? -32000
-                : 32000;
-
-        }
+            ? -32000
+            : 32000;
 
 
 
@@ -1533,52 +1316,26 @@ export class ChessEngine {
 
 
 
-        const values = {
-
+        const values={
 
             p:100,
-
             n:320,
-
             b:330,
-
             r:500,
-
             q:900,
-
             k:20000
-
 
         };
 
 
 
-        let score = 0;
+        let score=0;
 
 
 
-        const board =
-            game.board();
+        for(const row of game.board()){
 
-
-
-        for(
-            let r=0;
-            r<8;
-            r++
-        ) {
-
-
-            for(
-                let c=0;
-                c<8;
-                c++
-            ) {
-
-
-                const piece =
-                    board[r][c];
-
+            for(const piece of row){
 
 
                 if(!piece)
@@ -1586,16 +1343,11 @@ export class ChessEngine {
 
 
 
-                const value =
-                    values[piece.type];
-
-
-
                 if(piece.color==='w')
-                    score += value;
+                    score += values[piece.type];
 
                 else
-                    score -= value;
+                    score -= values[piece.type];
 
 
             }
@@ -1606,7 +1358,6 @@ export class ChessEngine {
 
         return score;
 
-
     }
 
 
@@ -1615,20 +1366,19 @@ export class ChessEngine {
 
 
 
-    stop() {
-
+    stop(){
 
         if(this.worker)
-            this.sendCommand('stop');
+            this.sendCommand(
+                'stop'
+            );
 
 
 
         if(
-            this.currentTask
-            &&
+            this.currentTask &&
             this.currentTask.resolve
-        ) {
-
+        ){
 
             this.currentTask.resolve([]);
 
@@ -1636,14 +1386,13 @@ export class ChessEngine {
 
 
 
-        this.currentTask = null;
+        this.currentTask=null;
 
-        this.engineBusy = false;
+        this.engineBusy=false;
 
-        this.multiPVData = [];
+        this.multiPVData=[];
 
     }
-
 
 
 }
