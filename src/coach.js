@@ -4,6 +4,7 @@
  */
 
 import { Chess } from 'chess.js';
+import { CoachNaomi } from './coach.js';
 import { ChessEngine } from './engine.js';
 import { ChessBoardUI, getPieceSvg } from './board.js';
 import { Storage } from './storage.js';
