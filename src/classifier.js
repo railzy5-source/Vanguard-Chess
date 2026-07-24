@@ -1,7 +1,7 @@
 /**
  * Objective Move Classifier Engine
  * Evaluates move quality using fixed, universal Centipawn Loss standards.
- * No Elo scaling or subjective sliding thresholds.
+ * Opening book awareness prevents false "mistake" classifications.
  */
 
 export class MoveClassifier {
@@ -15,16 +15,20 @@ export class MoveClassifier {
    * @param {number} params.evalAfter - Evaluation score after move (in centipawns from active player POV)
    * @param {boolean} [params.isSacrifice=false] - Whether move sacrificed material
    * @param {boolean} [params.isBook=false] - Whether move is known opening theory
+   * @param {string} [params.openingName] - Name of the opening if it's a book move
    * @returns {Object} { classification, cpLoss, badge, icon, color }
    */
-  static classifyMove({ playedUci, bestUci, evalBefore = 0, evalAfter = 0, isSacrifice = false, isBook = false }) {
+  static classifyMove({ playedUci, bestUci, evalBefore = 0, evalAfter = 0, isSacrifice = false, isBook = false, openingName = '' }) {
+    // BOOK MOVES — OVERRIDE everything else
+    // This prevents principled opening moves from being incorrectly flagged as mistakes
     if (isBook) {
       return {
         classification: 'Book',
         cpLoss: 0,
-        badge: 'Book Move',
+        badge: '📖 Book Move',
         icon: '📖',
-        color: 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+        color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+        openingName: openingName || 'Book Theory'
       };
     }
 
