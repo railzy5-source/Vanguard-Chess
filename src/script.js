@@ -381,6 +381,50 @@ class VanguardChessApp {
     document.getElementById('branch-btn-prev')?.addEventListener('click', () => this.scrubBranchPly(this.branchPlyIndex - 1));
     document.getElementById('branch-btn-next')?.addEventListener('click', () => this.scrubBranchPly(this.branchPlyIndex + 1));
 
+        // API Key Settings
+    document.getElementById('btn-save-api-key')?.addEventListener('click', () => {
+      const input = document.getElementById('setting-gemini-key');
+      const status = document.getElementById('api-key-status');
+      const key = input?.value?.trim();
+      
+      if (key && key.length > 10) {
+        this.llmCoach.setApiKey('gemini', key);
+        if (status) {
+          status.textContent = '✅ Status: Gemini API configured and ready!';
+          status.className = 'text-[10px] text-emerald-400';
+        }
+        input.value = '';
+        this.coach.speak('Gemini API key saved! I can now provide much deeper chess insights! 🎉', 'happy');
+      } else {
+        if (status) {
+          status.textContent = '⚠️ Please enter a valid Gemini API key (starts with "AIza")';
+          status.className = 'text-[10px] text-amber-400';
+        }
+      }
+    });
+
+    document.getElementById('btn-clear-api-key')?.addEventListener('click', () => {
+      const status = document.getElementById('api-key-status');
+      this.llmCoach.clearApiKey();
+      if (status) {
+        status.textContent = 'ℹ️ Status: API key cleared (using heuristic coach)';
+        status.className = 'text-[10px] text-zinc-400';
+      }
+      this.coach.speak('API key cleared. I\'ll use my heuristic coach mode for explanations.', 'supportive');
+    });
+
+    // Check API key status on load
+    const statusEl = document.getElementById('api-key-status');
+    if (statusEl) {
+      if (this.llmCoach.isReady()) {
+        statusEl.textContent = '✅ Status: Gemini API configured and ready!';
+        statusEl.className = 'text-[10px] text-emerald-400';
+      } else {
+        statusEl.textContent = 'ℹ️ Status: Not configured (using heuristic coach)';
+        statusEl.className = 'text-[10px] text-zinc-400';
+      }
+    }
+
     // Keyboard Arrow navigation for Deep Dive
     document.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
